@@ -43,8 +43,7 @@
     kalibrering: 'sektor',      // Atemp skalas mot SCB:s fjärrvärme 2024: 'sektor' = flerbostadshus resp. lokaler/industri var för sig
                                 // (småhus kontrolleras mot SCB:s bostadsarea och kalibreras inte), 'total' = en faktor för alla, 'ingen'
     industriAndel: 0.5,         // uppvärmd andel av BTA i odeklarerade industri-/lagerbyggnader (antagande)
-    // Osäkerhet (Monte Carlo)
-    cvEfEl: 0.25, cvEfFv: 0.20, // osäkerhet (CV) i emissionsfaktorerna – val av faktor och metod
+    // Osäkerhet (Monte Carlo). Emissionsfaktorerna är Boverkets värden och varieras inte.
     cvKalibrering: 0.08,        // osäkerhet i kalibreringsmålet (normalår, sektorsgränser, saknade sektorsvärden)
     iterationer: 1000, seed: 19062026,
     effektivisering2050: 0,     // % lägre levererad energi i befintligt bestånd 2050 (linjärt från 2024)
@@ -73,7 +72,7 @@
 
   const LIMITS = {
     efEl: [0, 2], efFv: [0, 2], atempFaktor: [0.3, 1.2], atempFast: [10, 1e6], elFast: [0, 1],
-    industriAndel: [0, 1], cvEfEl: [0, 2], cvEfFv: [0, 2], cvKalibrering: [0, 1], iterationer: [100, 5000], seed: [1, 2147483646],
+    industriAndel: [0, 1], cvKalibrering: [0, 1], iterationer: [100, 5000], seed: [1, 2147483646],
     effektivisering2050: [-100, 100], efForandring2050: [-100, 200], trafikForandring2050: [-100, 200],
     flotta2030: [0, 3], flotta2040: [0, 3], flotta2050: [0, 3],
     f1Start: [2025, 2050], f1Slut: [2026, 2060], f2Start: [2025, 2060], f2Slut: [2026, 2070],
@@ -223,30 +222,30 @@
       dhModell: dh, dhKalibrerad: dhCal, dhMal: cal ? (cal.single ? cal.mal[0] : (S.kal.mal_fjarrvarme_mwh * 1000)) : null, dhGrupp: Array.from(dhG), perKlass, poster: it.m};
   }
 
-  /* Monte Carlo för energi i befintliga byggnader (år 2024). Returnerar percentiler per DeSO och för Malmö. */
+  /* Monte Carlo för energi i befintliga byggnader (år 2024). Emissionsfaktorerna hålls fasta (Boverket).
+     Returnerar percentiler per DeSO och för Malmö. */
   function rng(seed) { let a = seed >>> 0; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
   function gauss(r) { let u = 0; while (u === 0) u = r(); const v = r(), m = Math.sqrt(-2 * Math.log(u)); return [m * Math.cos(2 * Math.PI * v), m * Math.sin(2 * Math.PI * v)]; }
   const lnMean1 = (cv, z) => { const s = Math.sqrt(Math.log(1 + cv * cv)); return Math.exp(s * z - s * s / 2); };
   function quant(sorted, p) { const k = (sorted.length - 1) * p, lo = Math.floor(k), hi = Math.min(sorted.length - 1, lo + 1); return sorted[lo] + (sorted[hi] - sorted[lo]) * (k - lo); }
   async function simulateEnergy(S, pIn, onProgress = () => {}) {
     const P = params(pIn), it = energyItems(S, P), E = S.D.energi.kolumner, n = S.n, N = P.iterationer, r = rng(P.seed);
-    const cal = calibration(S, P), G = 3, draws = new Float64Array(N * n), drawsAkt = new Float64Array(N * n);
-    const tmp = new Float64Array(G * n), tmpA = new Float64Array(G * n), dhG = new Float64Array(G), kfG = new Float64Array(G);
+    const cal = calibration(S, P), G = 3, draws = new Float64Array(N * n);
+    const tmp = new Float64Array(G * n), dhG = new Float64Array(G), kfG = new Float64Array(G);
     const gOf = new Int8Array(it.m); for (let i = 0; i < it.m; i++) gOf[i] = cal && cal.single ? 0 : it.grp[i];
-    const city = new Float64Array(N), cityAkt = new Float64Array(N), kk = new Float64Array(N);
+    const city = new Float64Array(N), kk = new Float64Array(N);
     const nLv = SIG_LV.length, nK = S.KL.length, TWO_PI = 2 * Math.PI;
     const z = () => gauss(r)[0];
     for (let k = 0; k < N; k++) {
-      const mEl = lnMean1(P.cvEfEl, z()), mFv = lnMean1(P.cvEfFv, z());
       const mAt = P.atempLage === 'fast' ? lnMean1(UNC.fastAtempSys, z()) : lnMean1(UNC.atempFaktorCv, z());
       const lvB = new Float64Array(nLv); for (let q = 0; q < nLv; q++) lvB[q] = P.atempLage === 'fast' ? 1 : lnMean1(SYS_LV[q], z());
       const seD = lnMean1(UNC.seDeklSys, z()), seK = new Float64Array(nK); for (let q = 0; q < nK; q++) seK[q] = lnMean1(UNC.seKlassSys, z());
       const elShift = UNC.elSys * z(), eps = [1 + P.cvKalibrering * z(), 1 + P.cvKalibrering * z(), 1 + P.cvKalibrering * z()];
       const indLo = Math.max(0, P.industriAndel - UNC.industriSpann), indHi = Math.min(1, P.industriAndel + UNC.industriSpann);
       const indF = P.industriAndel > 0 ? (indLo + (indHi - indLo) * r()) / P.industriAndel : 1;
-      const efE = P.efEl * mEl, efF = P.efFv * mFv;
-      const row = draws.subarray(k * n, (k + 1) * n), rowA = drawsAkt.subarray(k * n, (k + 1) * n);
-      tmp.fill(0); tmpA.fill(0); dhG.fill(0);
+      const efE = P.efEl, efF = P.efFv; // Boverkets emissionsfaktorer, fasta
+      const row = draws.subarray(k * n, (k + 1) * n);
+      tmp.fill(0); dhG.fill(0);
       for (let i = 0; i < it.m; i++) {
         let u = r(); while (u === 0) u = r();
         const rad = Math.sqrt(-2 * Math.log(u)), ang = TWO_PI * r(), z1 = rad * Math.cos(ang), z2 = rad * Math.sin(ang);
@@ -254,29 +253,28 @@
         let a = it.a[i] * lvB[it.btak[i]] * mAt; if (it.stock[i] === 1 && it.kl[i] === S.IND) a *= indF;
         const e = a * it.se[i] * (it.stock[i] === 1 ? (seK[it.kl[i]] || 1) : seD) * mag;
         let s = it.el[i] + elShift + it.sigEl[i] * z2; s = s < 0 ? 0 : s > 1 ? 1 : s;
-        const ton = e * (s * efE + (1 - s) * efF) / 1000, tonA = e * (s * P.efEl + (1 - s) * P.efFv) / 1000, g = gOf[i], o = g * n; dhG[g] += e * (1 - s);
-        if (it.stock[i] === 1) { tmp[o + it.deso[i]] += ton; tmpA[o + it.deso[i]] += tonA; continue; }
+        const ton = e * (s * efE + (1 - s) * efF) / 1000, g = gOf[i], o = g * n; dhG[g] += e * (1 - s);
+        if (it.stock[i] === 1) { tmp[o + it.deso[i]] += ton; continue; }
         const al = E.alloc[i];
-        for (let q = 0; q < al.length; q++) { tmp[o + al[q][0]] += ton * al[q][1]; tmpA[o + al[q][0]] += tonA * al[q][1]; }
+        for (let q = 0; q < al.length; q++) tmp[o + al[q][0]] += ton * al[q][1];
       }
       let dhSum = 0, dhCal = 0;
       for (let g = 0; g < G; g++) { kfG[g] = cal && cal.mal[g] && dhG[g] > 0 ? cal.mal[g] * eps[g] / dhG[g] : 1; dhSum += dhG[g]; dhCal += dhG[g] * kfG[g]; }
-      let tot = 0, totA = 0;
-      for (let d = 0; d < n; d++) { let v = 0, vA = 0; for (let g = 0; g < G; g++) { v += kfG[g] * tmp[g * n + d]; vA += kfG[g] * tmpA[g * n + d]; } row[d] = v; rowA[d] = vA; tot += v; totA += vA; }
-      city[k] = tot; cityAkt[k] = totA; kk[k] = dhSum > 0 ? dhCal / dhSum : 1;
+      let tot = 0;
+      for (let d = 0; d < n; d++) { let v = 0; for (let g = 0; g < G; g++) v += kfG[g] * tmp[g * n + d]; row[d] = v; tot += v; }
+      city[k] = tot; kk[k] = dhSum > 0 ? dhCal / dhSum : 1;
       if (k % 25 === 24) { if (onProgress((k + 1) / N) === false) return null; await new Promise(res => setTimeout(res, 0)); } // false = avbryt
     }
     onProgress(1);
     const stat = arr => { const s = Float64Array.from(arr).sort(); let m = 0; for (const x of s) m += x; return {p025: quant(s, 0.025), p50: quant(s, 0.5), p975: quant(s, 0.975), mean: m / s.length}; };
     const perDeso = src => { const o = {p025: new Float64Array(n), p50: new Float64Array(n), p975: new Float64Array(n), mean: new Float64Array(n)}, col = new Float64Array(N);
       for (let d = 0; d < n; d++) { for (let k = 0; k < N; k++) col[k] = src[k * n + d]; const st = stat(col); o.p025[d] = st.p025; o.p50[d] = st.p50; o.p975[d] = st.p975; o.mean[d] = st.mean; } return o; };
-    return {iterationer: N, seed: P.seed, deso: perDeso(draws), desoAktivitet: perDeso(drawsAkt), city: stat(city), cityAktivitet: stat(cityAkt), k: stat(kk),
-      cityDraws: Float64Array.from(city), cityAktDraws: Float64Array.from(cityAkt),
+    return {iterationer: N, seed: P.seed, deso: perDeso(draws), city: stat(city), k: stat(kk), cityDraws: Float64Array.from(city),
       nyckel: uncertaintyKey(P), skapad: new Date().toISOString()};
   }
   /* Antaganden som påverkar energins osäkerhetsberäkning (ändras de krävs ny körning). */
   function uncertaintyKey(P) {
-    return JSON.stringify(['bestand', 'kalibrering', 'industriAndel', 'efEl', 'efFv', 'atempLage', 'atempFaktor', 'atempFast', 'elLage', 'elFast', 'cvEfEl', 'cvEfFv', 'cvKalibrering', 'iterationer', 'seed'].map(k => P[k]));
+    return JSON.stringify(['bestand', 'kalibrering', 'industriAndel', 'efEl', 'efFv', 'atempLage', 'atempFaktor', 'atempFast', 'elLage', 'elFast', 'cvKalibrering', 'iterationer', 'seed'].map(k => P[k]));
   }
 
   /* Energins årsfaktor relativt 2024 (effektivisering × förändrade emissionsfaktorer); 'ack' = summa 2030–2050. */
@@ -290,9 +288,8 @@
   function energyInterval(U, P, ar) {
     if (!U) return null;
     const f = energyYearFactor(P, ar), sc = o => ({p025: o.p025 * f, p50: o.p50 * f, p975: o.p975 * f, mean: o.mean * f});
-    const d = U.deso, dA = U.desoAktivitet;
-    return {f, city: sc(U.city), cityAktivitet: sc(U.cityAktivitet), lo: i => d.p025[i] * f, mid: i => d.p50[i] * f, hi: i => d.p975[i] * f,
-      loA: i => dA.p025[i] * f, hiA: i => dA.p975[i] * f};
+    const d = U.deso;
+    return {f, city: sc(U.city), lo: i => d.p025[i] * f, mid: i => d.p50[i] * f, hi: i => d.p975[i] * f};
   }
 
   /* Huvudberäkning. Returnerar årsvärden per DeSO och komponent för 2024–2050. */

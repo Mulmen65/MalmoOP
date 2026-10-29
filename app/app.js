@@ -116,12 +116,12 @@ function stackChart(id, rows, comps, opts = {}) {
     '<div class="chart-legend">' + comps.map(c => '<span><i style="background:' + COLORS[c] + '"></i>' + esc(M.SHORT[c]) + (opts.legendRow ? ' <b>' + nf(opts.legendRow[c]) + ' t</b>' : '') + '</span>').join('') + '</div>';
 }
 function drawCharts() { for (const c of charts) if (c.draw) c.draw(); else drawChart(c); }
-/* Histogram över Monte Carlo-dragningarna för hela Malmö, med 95 %-intervall för alla källor och för aktivitetsdata */
+/* Histogram över Monte Carlo-dragningarna för hela Malmö, med 95 %-intervall */
 function drawHist(id, I, det) {
   const wrap = $(id); if (!wrap || !U) return;
-  const W = Math.max(280, wrap.clientWidth), H = 250, L = 10, Rm = 14, T = 12, B = 96;
+  const W = Math.max(280, wrap.clientWidth), H = 226, L = 10, Rm = 14, T = 12, B = 64;
   const v = Array.from(U.cityDraws, x => x * I.f / 1000).sort((a, b) => a - b), d = det / 1000;
-  const vmin = Math.min(v[0], I.cityAktivitet.p025 / 1000, d), vmax = Math.max(v[v.length - 1], d);
+  const vmin = Math.min(v[0], d), vmax = Math.max(v[v.length - 1], d);
   const stepV = niceStep((vmax - vmin) / 5), x0 = Math.floor(vmin / stepV) * stepV, x1 = Math.ceil(vmax / stepV) * stepV;
   const nb = Math.max(16, Math.min(40, Math.round((W - L - Rm) / 14))), bw = (x1 - x0) / nb, cnt = new Array(nb).fill(0);
   for (const x of v) cnt[Math.min(nb - 1, Math.max(0, Math.floor((x - x0) / bw)))]++;
@@ -134,8 +134,7 @@ function drawHist(id, I, det) {
   g += vline(I.city.p025 / 1000, true, '2,5 %', 'end') + vline(I.city.p975 / 1000, true, '97,5 %', 'start') + vline(d, false, '', 'start');
   const strip = (y, lo, hi, col, txt) => '<text class="axis-label" x="' + L + '" y="' + (y - 7) + '">' + txt + '</text><line x1="' + X(lo / 1000) + '" x2="' + X(hi / 1000) + '" y1="' + y + '" y2="' + y + '" stroke="' + col + '" stroke-width="6" stroke-linecap="round"/><circle cx="' + X(d) + '" cy="' + y + '" r="4.5" fill="#fff" stroke="#103c38" stroke-width="1.6"/>';
   g += '<text class="axis-label" x="' + (W - Rm) + '" y="' + (yb + 15) + '" text-anchor="end" dx="0" dy="12">kt CO₂e</text>';
-  g += strip(yb + 50, I.city.p025, I.city.p975, COLORS.energi, 'Alla osäkerhetskällor · ' + kt(I.city.p025) + '–' + kt(I.city.p975) + ' kt');
-  g += strip(yb + 84, I.cityAktivitet.p025, I.cityAktivitet.p975, '#7fcaa9', 'Emissionsfaktorerna fasta (bara aktivitetsdata) · ' + kt(I.cityAktivitet.p025) + '–' + kt(I.cityAktivitet.p975) + ' kt');
+  g += strip(yb + 50, I.city.p025, I.city.p975, COLORS.energi, '95 %-intervall · ' + kt(I.city.p025) + '–' + kt(I.city.p975) + ' kt · Boverkets emissionsfaktorer');
   wrap.innerHTML = '<svg width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + ' ' + H + '">' + g + '</svg>';
 }
 function drawChart({id, rows, comps, opts}) {
@@ -213,19 +212,19 @@ function overview() {
 function uncertaintyCard() {
   const I = EI(), det = cur().city.energi, eb = R.energyBase;
   const fact = (dt, dd, sm) => '<div><dt>' + dt + '</dt><dd>' + dd + '<small>' + sm + '</small></dd></div>';
-  let h = '<article class="card u-card"><div class="row wrap u-head"><div><h2>Osäkerhet · energi i befintliga byggnader</h2><p class="card-sub">Monte Carlo för hela Malmö, ' + esc(yearLabel(P.ar)) + '. Atemp, energiprestanda, elandel, kalibreringsmål och emissionsfaktorer varieras samtidigt, både som gemensamma (systematiska) fel och som slumpfel per byggnad.</p></div></div>';
+  let h = '<article class="card u-card"><div class="row wrap u-head"><div><h2>Osäkerhet · energi i befintliga byggnader</h2><p class="card-sub">Monte Carlo för hela Malmö, ' + esc(yearLabel(P.ar)) + '. Atemp, energiprestanda, elandel och kalibreringsmål varieras samtidigt, både som gemensamma (systematiska) fel och som slumpfel per byggnad. Emissionsfaktorerna är Boverkets värden och hålls fasta.</p></div></div>';
   h += '<div data-u-status>' + uStatusHtml() + '</div>';
   if (I) {
     const kTxt = eb.kalibrering === 'ingen' ? 'ingen kalibrering' : nf(U.k.p50, 2) + '<small>95 %: ' + nf(U.k.p025, 2) + '–' + nf(U.k.p975, 2) + ' · Atemp skalas så att fjärrvärmen möter SCB</small>';
     h += '<div class="u-grid"><dl class="u-facts">' +
       fact('Beräknat värde', kt(det) + ' kt CO₂e', isAck() ? 'summa 2030–2050' : 'per år') +
       fact('95 %-intervall', kt(I.city.p025) + '–' + kt(I.city.p975) + ' kt', 'median ' + kt(I.city.p50) + ' kt · ' + pct(I.city.p025 / det - 1) + ' / ' + pct(I.city.p975 / det - 1) + ' mot beräknat värde') +
-      fact('Emissionsfaktorerna fasta', kt(I.cityAktivitet.p025) + '–' + kt(I.cityAktivitet.p975) + ' kt', 'bara aktivitetsdata: Atemp, energiprestanda, elandel och kalibrering') +
+      fact('Emissionsfaktorer (fasta)', 'el ' + nf(P.efEl, 3) + ' · fv ' + nf(P.efFv, 3), 'kg CO₂e/kWh' + (P.efEl === M.DEFAULTS.efEl && P.efFv === M.DEFAULTS.efFv ? ', Boverkets klimatdatabas' : ', egna värden') + ' · ingen osäkerhet') +
       '<div><dt>Kalibreringsfaktor (vägd)</dt><dd>' + kTxt + '</dd></div></dl>' +
       '<div class="chart-wrap" id="u-hist" role="img" aria-label="Fördelning av energins klimatavtryck i ' + nf(U.iterationer) + ' Monte Carlo-dragningar"></div></div>';
     charts.push({id: 'u-hist', draw: () => drawHist('u-hist', I, det)});
   }
-  h += '<p class="small">Det breda intervallet beror främst på emissionsfaktorerna (val av nationellt medelvärde, Malmöspecifik eller marginell faktor). Med fasta faktorer återstår osäkerheten i skattad Atemp, energiprestanda och elandel. Fördelningen mellan DeSO är mer osäker än summan: se intervallen per område på kartan. Modellens struktur (t.ex. att all energi som inte är el antas vara fjärrvärme) och framtidsantagandena ingår inte i intervallet.</p><div class="button-row"><button class="secondary" data-view="parameters">Ändra osäkerhetsantaganden →</button><button class="secondary" data-view="data">Byggnadsbestånd och kontroll mot SCB →</button><button class="secondary" data-view="method">Osäkerhetskällor →</button></div></article>';
+  h += '<p class="small">Intervallet visar osäkerheten i aktivitetsdata: skattad Atemp (våningar, Atemp/BTA, uppvärmd andel i industri), energiprestanda för deklarerade och skattade byggnader, elandel och SCB:s kalibreringsmål. Emissionsfaktorerna följer Boverket och ingår inte. Fördelningen mellan DeSO är mer osäker än summan: se intervallen per område på kartan. Modellens struktur (t.ex. att all energi som inte är el antas vara fjärrvärme) och framtidsantagandena ingår inte i intervallet.</p><div class="button-row"><button class="secondary" data-view="parameters">Ändra osäkerhetsantaganden →</button><button class="secondary" data-view="data">Byggnadsbestånd och kontroll mot SCB →</button><button class="secondary" data-view="method">Osäkerhetskällor →</button></div></article>';
   return h;
 }
 
@@ -386,7 +385,7 @@ function calcView() {
     '<p>Energiprestanda (kWh/m² Atemp och år) kommer från deklarationen. Atemp ' + (P.atempLage === 'osm' ? 'skattas ur OpenStreetMap-byggnadens fotavtryck × antal våningar × ' + nf(P.atempFaktor, 2) : 'sätts till ' + nf(P.atempFast) + ' m² per deklaration') + '. Elandelen ' + (P.elLage === 'kvot' ? 'skattas ur kvoten primärenergital/energiprestanda' : 'sätts till ' + nf(100 * P.elFast) + ' %') + '; resten antas vara fjärrvärme. ' +
     (P.bestand === 'hela' ? 'Byggnader utan deklaration får energiprestanda och elandel från deklarerade byggnader av samma typ i samma DeSO (annars RegSO eller hela Malmö); industri- och lagerbyggnader räknas med ' + nf(100 * P.industriAndel) + ' % uppvärmd yta. ' : 'Bara deklarerade byggnader ingår i valt läge. ') + kLine + '</p>' +
     '<div class="calc-result"><div><span class="lbl">Deklarationer (vägt)</span><b>' + nf(eb.count[i], 1) + '</b><small>' + nf(tDecl) + ' t</small></div><div><span class="lbl">Skattade byggnader</span><b>' + nf(stock.length) + '</b><small>' + nf(tStock) + ' t</small></div><div><span class="lbl">Atemp</span><b>' + nf(eb.atemp[i]) + ' m²</b></div><div><span class="lbl">Levererad energi</span><b>' + nf(eb.kwh[i] / 1e6, 2) + ' GWh</b></div><div><span class="lbl">2024</span><b>' + nf(eb.t[i]) + ' t</b></div><div><span class="lbl">' + yearLabel(P.ar) + '</span><b>' + nf(r.energi) + ' t</b><small class="ad-intervall">95 %: ' + (I ? ivTxt(I.lo(i), I.hi(i)) + ' t' : ivPending()) + '</small></div></div>' +
-    (I ? '<p class="small">Osäkerhet i området: ' + pct(I.lo(i) / Math.max(1e-9, r.energi) - 1) + ' / ' + pct(I.hi(i) / Math.max(1e-9, r.energi) - 1) + ' mot beräknat värde. Med fasta emissionsfaktorer: ' + ivTxt(I.loA(i), I.hiA(i)) + ' t.</p>' : '') +
+    (I ? '<p class="small">Osäkerhet i området: ' + pct(I.lo(i) / Math.max(1e-9, r.energi) - 1) + ' / ' + pct(I.hi(i) / Math.max(1e-9, r.energi) - 1) + ' mot beräknat värde (Boverkets emissionsfaktorer, fasta).</p>' : '') +
     (decl.length ? '<details class="calc-details"><summary>Deklarationer i området (' + decl.length + ')</summary><div class="table-wrap calc-full"><table><thead><tr><th>ID</th><th>Fastighet</th><th>Klass</th><th>Typ</th><th class="numeric">kWh/m²</th><th class="numeric">Atemp m²</th><th>Atemp-källa</th><th class="numeric">Elandel</th><th>Elandel-källa</th><th class="numeric">Andel</th><th class="numeric">t CO₂e 2024</th></tr></thead><tbody>' +
       decl.slice(0, 200).map(x => '<tr><td>' + x.id + '</td><td>' + esc(x.fast) + '</td><td>' + esc(x.klass) + '</td><td>' + esc(x.typ) + '</td><td class="numeric">' + nf(x.se) + '</td><td class="numeric">' + nf(x.a) + '</td><td>' + esc(x.btak.replace(/_/g, ' ')) + '</td><td class="numeric">' + nf(100 * x.s) + ' %</td><td>' + esc(x.elk.replace(/_/g, ' ')) + '</td><td class="numeric">' + nf(100 * x.w) + ' %</td><td class="numeric">' + nf(x.t, 1) + '</td></tr>').join('') + '</tbody></table></div></details>' : '<p class="small">Inga energideklarationer är kopplade till området.</p>') +
     (stock.length ? '<details class="calc-details"><summary>Skattade byggnader utan deklaration (' + stock.length + ')</summary><div class="table-wrap calc-full"><table><thead><tr><th>Typ</th><th>Typ bestämd av</th><th class="numeric">BTA m²</th><th>Våningskälla</th><th class="numeric">Atemp m²</th><th class="numeric">kWh/m²</th><th>Energiprestanda från</th><th class="numeric">Elandel</th><th class="numeric">t CO₂e 2024</th></tr></thead><tbody>' +
@@ -410,8 +409,8 @@ const FIELDS = [
     ['perspektiv', 'Mobilitet', 'select', [['A', 'A · Trafik inom området (Vägvis)'], ['B', 'B · Hushållens bilar (Vägvis)']], 'Vägvis 2.3.1. A: alla fordon på vägar i området inkl. genomfart. B: bilar registrerade på hushåll i området.'],
     ['bLage', 'Körsträcka i modell B', 'select', [['local', 'Kommunens körsträcka per bil (Vägvis standard)'], ['gtfs', 'DeSO-skattning med GTFS-utbud 2024']], 'Påverkar fördelningen mellan DeSO i B; Malmös summa är densamma.']]],
   ['Energi i befintliga byggnader', 'Energideklarationerna saknar uppvärmd area och energibärare. Båda skattas och kan ersättas här.', [
-    ['efEl', 'El, kg CO₂e/kWh', 'number', 0.001, 'Boverkets klimatdatabas, svensk elmix (Boverket, 2026a).'],
-    ['efFv', 'Fjärrvärme, kg CO₂e/kWh', 'number', 0.001, 'Boverkets klimatdatabas, svenskt medelvärde (Boverket, 2026a). Ej Malmöspecifik.'],
+    ['efEl', 'El, kg CO₂e/kWh', 'number', 0.001, 'Boverkets klimatdatabas, svensk elmix (Boverket, 2026a). Fast värde; ingen osäkerhet i Monte Carlo.'],
+    ['efFv', 'Fjärrvärme, kg CO₂e/kWh', 'number', 0.001, 'Boverkets klimatdatabas, svenskt medelvärde (Boverket, 2026a). Fast värde; ingen osäkerhet i Monte Carlo.'],
     ['atempLage', 'Atemp per deklaration', 'select', [['osm', 'Skattad ur OSM-byggnader (fotavtryck × våningar)'], ['fast', 'Samma yta för alla deklarationer']], 'OSM: OpenStreetMap-bidragsgivare. Se Data & kvalitet för våningskällor.'],
     ['atempFaktor', 'Atemp / BTA', 'number', 0.01, 'Andel av bruttoarean som är uppvärmd area. Antagande.'],
     ['atempFast', 'Fast Atemp, m² per deklaration', 'number', 50, 'Används bara i läget "samma yta".'],
@@ -419,12 +418,10 @@ const FIELDS = [
     ['elFast', 'Fast elandel (0–1)', 'number', 0.01, 'Används bara i läget "samma andel". Resten fjärrvärme.'],
     ['effektivisering2050', 'Energieffektivisering till 2050, %', 'number', 1, 'Lägre levererad energi i befintligt bestånd, linjärt från 2024. Känslighetsberäkning.'],
     ['efForandring2050', 'Förändrade emissionsfaktorer till 2050, %', 'number', 1, 'Gäller el och fjärrvärme i både befintliga och nya byggnader. Negativt = lägre utsläpp.']]],
-  ['Byggnadsbestånd, kalibrering och osäkerhet', 'Hela beståndet: byggnader utan energideklaration skattas från deklarerade byggnader av samma typ. Ytorna kan kalibreras mot SCB:s fjärrvärmestatistik. Osäkerheten beräknas med Monte Carlo.', [
+  ['Byggnadsbestånd, kalibrering och osäkerhet', 'Hela beståndet: byggnader utan energideklaration skattas från deklarerade byggnader av samma typ. Ytorna kan kalibreras mot SCB:s fjärrvärmestatistik. Osäkerheten beräknas med Monte Carlo; emissionsfaktorerna hålls fasta enligt Boverket.', [
     ['bestand', 'Byggnader som ingår', 'select', [['hela', 'Hela beståndet (deklarerade + skattade)'], ['deklarerade', 'Bara byggnader med energideklaration']], 'Skattade byggnader: alla OSM-byggnader i Malmö som är uppvärmda men saknar deklaration (se Data & kvalitet).'],
     ['kalibrering', 'Kalibrering mot SCB 2024', 'select', [['sektor', 'Per sektor (flerbostadshus, lokaler/industri)'], ['total', 'En faktor för all fjärrvärme'], ['ingen', 'Ingen kalibrering']], 'SCB (2026), kommunal energistatistik: fjärrvärme 2024 per sektor. Gäller bara hela beståndet.'],
     ['industriAndel', 'Uppvärmd andel i odeklarerade industri- och lagerbyggnader', 'number', 0.05, 'Antagande. Många lager och hallar är kalla eller tempererade.'],
-    ['cvEfEl', 'Osäkerhet i elens emissionsfaktor (CV)', 'number', 0.01, '0,25 = ±25 % (1 sd). Speglar val av faktor: nordisk mix, marginalel, ursprungsgarantier. 0 = fast faktor.'],
-    ['cvEfFv', 'Osäkerhet i fjärrvärmens emissionsfaktor (CV)', 'number', 0.01, 'Svenskt medelvärde mot Malmöspecifik faktor och allokeringsmetod. 0 = fast faktor.'],
     ['cvKalibrering', 'Osäkerhet i kalibreringsmålet (CV)', 'number', 0.01, 'Normalårskorrigering, sektorsgränser och sekretessbelagda värden i SCB:s statistik.'],
     ['iterationer', 'Iterationer', 'number', 100, '1 000 ger stabila 95 %-intervall (ca 4 s). Max 5 000.'],
     ['seed', 'Slumptalsfrö (seed)', 'number', 1, 'Samma seed och samma antaganden ger samma resultat.']], () => '<div class="u-param"><h3>Status</h3><div data-u-status>' + uStatusHtml() + '</div></div>'],
@@ -564,7 +561,7 @@ function methodView() {
     '<h2>3. Exploatering 2030–2050 (ÖP 2023)</h2><ul><li><b>Volymer:</b> bostäder, arbetsplatser och skolplatser per utbyggnadsområde från Malmö stads ÖP-underlag. BTA = bostäder × 90 m² + arbetsplatser × 25 m² (blandad stad) eller 100 m² (verksamhetsområde) + skolplatser × 10 m². Alla värden kan ändras.</li><li><b>Tid:</b> Fokus 1 byggs 2030–2039 och Fokus 2 2040–2049, jämnt fördelat. Enligt Malmö stad detaljplaneras Fokus 1 före 2030 och Fokus 2 därefter.</li><li><b>Nybyggnation (A1–A5):</b> BTA × klimatfaktor. Standard är Boverkets föreslagna gränsvärden för 2030: flerbostadshus 235, kontor/skolor 250, hallbyggnader 190 kg CO₂e/m² BTA. Alternativ: dagens referensvärden (358/383/291) eller en indikativ bana till −90 % år 2040 mot en 75-percentil som här approximeras som referensvärdet × 1,15.</li><li><b>Förändrad markanvändning:</b> utbyggnadsytan delas per DeSO och klassas med OpenStreetMap (åker, öppen mark, skog, vatten, bebyggd, okänd). Förlust = ha × hårdgörandel (0,7) × (kolförråd före − 22 t C/ha) × 44/12. Kolförråden är hämtade från Länsstyrelsen i Uppsala län (2025) och används som proxy. Utsläppet fördelas över byggåren.</li><li><b>Nya byggnaders energi:</b> BTA × 0,9 × 50 kWh/m² och år × emissionsfaktor (22 % el), från det år byggnaderna är klara.</li><li><b>Fördelning:</b> ett område som ligger i flera DeSO fördelas efter yta.</li></ul>' +
     '<h2>Osäkerhet och tolkning</h2><p>Energin i befintliga byggnader har en Monte Carlo-beräkning (standard 1 000 iterationer, seed 19062026). Varje iteration drar gemensamma fel, som påverkar alla byggnader lika, och slumpfel per byggnad. Gemensamma fel ger brett intervall för summan; slumpfel jämnas ut i summan men inte i ett litet område. Kalibreringen dras om i varje iteration, så ett för högt dragen Atemp vägs delvis upp av en lägre faktor k.</p>' +
     '<table class="quality-table"><thead><tr><th>Källa</th><th>Gemensamt fel</th><th>Slumpfel per byggnad</th></tr></thead><tbody>' +
-    '<tr><td>Emissionsfaktor el / fjärrvärme</td><td>CV ' + nf(P.cvEfEl, 2) + ' / ' + nf(P.cvEfFv, 2) + ' (lognormal)</td><td>–</td></tr>' +
+    '<tr><td>Emissionsfaktor el / fjärrvärme</td><td>Ingen: Boverkets värden ' + nf(P.efEl, 3) + ' / ' + nf(P.efFv, 3) + ' kg CO₂e/kWh gäller</td><td>–</td></tr>' +
     '<tr><td>Atemp/BTA</td><td>CV ' + nf(M.UNC.atempFaktorCv, 2) + '</td><td>–</td></tr>' +
     '<tr><td>Våningar (per våningskälla)</td><td>CV 0,03 (building:levels) – 0,20 (industri, schablon)</td><td>CV 0,10 (building:levels) – 0,60 (saknad byggnad)</td></tr>' +
     '<tr><td>Energiprestanda, deklarerad / skattad</td><td>CV ' + nf(M.UNC.seDeklSys, 2) + ' / ' + nf(M.UNC.seKlassSys, 2) + ' per byggnadstyp</td><td>CV ' + nf(M.UNC.seDekl, 2) + ' / ' + nf(M.UNC.seSkattad, 2) + '</td></tr>' +
@@ -580,9 +577,9 @@ function methodView() {
 function download(name, text, mime) { const b = new Blob([text], {type: mime}), a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = name; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500); }
 const csvCell = x => typeof x === 'number' ? String(Math.round(x * 1000) / 1000).replace('.', ',') : '"' + String(x ?? '').replace(/"/g, '""') + '"';
 function csvDeso() {
-  const v = cur(), I = EI(), head = ['deso', 'omrade', 'ar', 'perspektiv_mobilitet', ...M.COMPONENTS, 'total', 'land_ha', 'invanare', 't_per_ha', 'kg_per_ha', 't_per_invanare', 'energi_p025', 'energi_p975', 'energi_p025_fasta_ef', 'energi_p975_fasta_ef'];
+  const v = cur(), I = EI(), head = ['deso', 'omrade', 'ar', 'perspektiv_mobilitet', ...M.COMPONENTS, 'total', 'land_ha', 'invanare', 't_per_ha', 'kg_per_ha', 't_per_invanare', 'energi_p025', 'energi_p975'];
   return '﻿' + head.join(';') + '\n' + v.rows.map(r => [r.id, areaName(r.id), yearLabel(P.ar), P.perspektiv, ...M.COMPONENTS.map(c => r[c]), r.total, r.land_ha, r.bef, M.metric(r, 'total', 't_ha'), M.metric(r, 'total', 'kg_ha'), M.metric(r, 'total', 't_inv'),
-    I ? I.lo(r.i) : '', I ? I.hi(r.i) : '', I ? I.loA(r.i) : '', I ? I.hiA(r.i) : ''].map(csvCell).join(';')).join('\n');
+    I ? I.lo(r.i) : '', I ? I.hi(r.i) : ''].map(csvCell).join(';')).join('\n');
 }
 function csvYears() { return '﻿' + ['ar', ...M.COMPONENTS, 'total', 'invanare'].join(';') + '\n' + M.cityByYear(R).map(r => [r.year, ...M.COMPONENTS.map(c => r[c]), r.total, r.bef].map(csvCell).join(';')).join('\n'); }
 function csvDecl() {
@@ -597,8 +594,9 @@ function csvDecl() {
 function jsonAll() {
   const I = EI(), eb = R.energyBase;
   const osak = I ? {metod: 'Monte Carlo, energi i befintliga byggnader', iterationer: U.iterationer, seed: U.seed, ar: P.ar, arsfaktor: I.f,
-    malmo_t: I.city, malmo_fasta_emissionsfaktorer_t: I.cityAktivitet, kalibreringsfaktor: U.k,
-    deso_t: Object.fromEntries(S.ids.map((id, i) => [id, {p025: I.lo(i), p50: I.mid(i), p975: I.hi(i), p025_fasta_ef: I.loA(i), p975_fasta_ef: I.hiA(i)}]))} : null;
+    emissionsfaktorer: {el: P.efEl, fjarrvarme: P.efFv, kalla: 'Boverket (2026a), fasta i beräkningen'},
+    malmo_t: I.city, kalibreringsfaktor: U.k,
+    deso_t: Object.fromEntries(S.ids.map((id, i) => [id, {p025: I.lo(i), p50: I.mid(i), p975: I.hi(i)}]))} : null;
   return JSON.stringify({app: 'MalmoOP', version: M.VERSION, created: new Date().toISOString(), antaganden: P, malmo_per_ar: M.cityByYear(R), deso_valt_ar: cur().rows,
     energi_kalibrering: {lage: eb.kalibrering, grupper: eb.grupper, fjarrvarme_modell_kwh: eb.dhModell, fjarrvarme_kalibrerad_kwh: eb.dhKalibrerad}, osakerhet_energi: osak,
     utbyggnadsomraden: R.areas, kallor: D.meta.referenser}, null, 1);

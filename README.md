@@ -31,7 +31,7 @@ python -m streamlit run streamlit_app.py
 | Atemp (saknas i CSV) | Skattas ur OpenStreetMap-byggnader: fotavtryck × våningar × 0,9. Våningar från `building:levels`, höjd/3 m eller median i DeSO/RegSO/Malmö. |
 | Hela byggnadsbeståndet | Alla 60 757 OSM-byggnader i uttaget klassas. 15 163 har deklaration. 22 527 uppvärmda byggnader utan deklaration skattas med median-energiprestanda och elandel för samma typ i DeSO, RegSO eller Malmö. Av dessa är 716 sammanbyggda med en deklarerad byggnad. 12 678 ouppvärmda byggnader och 10 389 byggnader utanför Malmö ingår inte. |
 | Kalibrering | SCB:s fjärrvärme 2024 per sektor: Atemp i flerbostadshus × 0,93 och i lokaler/industri × 0,63. Småhus kalibreras inte; antalet (27 761 mot SCB:s 27 852) och ytan stämmer med SCB:s bostadsstatistik. |
-| Osäkerhet | Monte Carlo i webbläsaren (1 000 iterationer, ca 4 s). Energi 2024: 137 kt CO₂e, 95 % 95–197 kt; med fasta emissionsfaktorer 121–156 kt. |
+| Osäkerhet | Monte Carlo i webbläsaren (1 000 iterationer, ca 4 s). Energi 2024: 137 kt CO₂e, 95 % 121–154 kt (−11 % / +13 %); per DeSO typiskt ±24 %. Emissionsfaktorerna är Boverkets och hålls fasta. |
 | Energibärare (saknas i CSV) | Skattas ur kvoten primärenergital/energiprestanda; regimskifte BBR 29 den 1 september 2020. |
 | Mobilitet | Vägvis 2.3.1: A från färdigt resultat; B körs med Vägvis motor (3 000 iterationer). |
 | Exploatering | 36 områden i ÖP 2023 med 38 850 bostäder och 37 900 arbetsplatser, uppdelade per DeSO med marktäcke från OSM. |
@@ -71,7 +71,8 @@ Per hektar        = t / landyta utan hav (ha); kg/ha = 1000 × t/ha
 | Byggnader som ingår | Hela beståndet (deklarerade + skattade) | OSM-klassning, se Data & kvalitet |
 | Kalibrering | Per sektor mot SCB:s fjärrvärme 2024 | SCB (2026a) |
 | Uppvärmd andel, odeklarerad industri/lager | 0,5 | Antagande |
-| Osäkerhet el / fjärrvärme / kalibrering (CV) | 0,25 / 0,20 / 0,08 | Antagande, se Metod & källor |
+| Osäkerhet i kalibreringsmålet (CV) | 0,08 | Antagande, se Metod & källor |
+| Emissionsfaktorer i osäkerhetsberäkningen | Fasta (Boverkets värden) | Boverket (2026a) |
 | Fokus 1 / Fokus 2 | byggs 2030–2039 / 2040–2049 | Malmö stad: Fokus 1 detaljplaneras före 2030 |
 | BTA per bostad / arbetsplats | 90 m² / 25 m² (blandad stad), 100 m² (verksamhet) | Antaganden |
 | Uppförande A1–A5 | 235 (flerbostadshus), 250 (kontor/skola), 190 (hall) kg/m² BTA | Boverket (2026b), förslag till gränsvärden 2030 |
@@ -101,7 +102,7 @@ Monte Carlo-beräkningen gäller energi i befintliga byggnader och körs automat
 
 | Källa | Gemensamt fel (alla byggnader) | Slumpfel per byggnad |
 |---|---|---|
-| Emissionsfaktor el / fjärrvärme | CV 0,25 / 0,20 | – |
+| Emissionsfaktor el / fjärrvärme | Ingen: Boverkets 0,037 / 0,056 gäller | – |
 | Atemp/BTA | CV 0,06 | – |
 | Våningar per våningskälla | CV 0,03–0,20 | CV 0,10–0,60 |
 | Energiprestanda, deklarerad / skattad | CV 0,05 / 0,15 per typ | CV 0,10 / 0,30 |
@@ -109,7 +110,7 @@ Monte Carlo-beräkningen gäller energi i befintliga byggnader och körs automat
 | Uppvärmd andel i industri och lager | likformig ±25 procentenheter | – |
 | Kalibreringsmål (SCB) | CV 0,08 per sektor | – |
 
-Kalibreringen räknas om i varje iteration. Intervallen för framtida år skalas med årets effektivisering och förändrade emissionsfaktorer. Sätt CV för emissionsfaktorerna till 0 för att se osäkerheten i aktivitetsdata ensam. Resultatet (2,5-, 50- och 97,5-percentil per DeSO) följer med i CSV- och JSON-exporten.
+Kalibreringen räknas om i varje iteration. Intervallen för framtida år skalas med årets effektivisering och förändrade emissionsfaktorer. Intervallen speglar alltså osäkerheten i aktivitetsdata (Atemp, energiprestanda, elandel och kalibrering), inte valet av emissionsfaktor. Resultatet (2,5-, 50- och 97,5-percentil per DeSO) följer med i CSV- och JSON-exporten.
 
 ## Tester
 

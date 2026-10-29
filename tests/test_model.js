@@ -168,11 +168,12 @@ test('Deklarationernas DeSO-vikter summerar till 1', () => {
     for (let d = 0; d < S.n; d++) assert.ok(a.deso.p025[d] <= a.deso.p50[d] + 1e-9 && a.deso.p50[d] <= a.deso.p975[d] + 1e-9, 'DeSO ' + d);
     const det = sum(M.energyBase(S, M.params(P)).t);
     assert.ok(a.city.p025 < det && det < a.city.p975, 'Malmö ' + det);
-    assert.ok(a.cityAktivitet.p975 - a.cityAktivitet.p025 < a.city.p975 - a.city.p025, 'fasta faktorer ger smalare intervall');
   });
-  const z = await M.simulateEnergy(S, {iterationer: 100, atempLage: 'fast', elLage: 'fast', cvEfEl: 0, cvEfFv: 0, bestand: 'deklarerade', seed: 7});
-  test('Monte Carlo: fasta emissionsfaktorer ger samma intervall för total och aktivitetsdata', () => {
-    near(z.city.p025, z.cityAktivitet.p025, 1e-9); near(z.city.p975, z.cityAktivitet.p975, 1e-9);
+  const z1 = await M.simulateEnergy(S, {iterationer: 100, seed: 7}), z2 = await M.simulateEnergy(S, {iterationer: 100, seed: 7, efEl: 0.074, efFv: 0.112});
+  test('Monte Carlo: emissionsfaktorerna är fasta (Boverket) och skalar dragningarna exakt', () => {
+    assert.ok(!('cvEfEl' in M.DEFAULTS) && !('cvEfFv' in M.DEFAULTS), 'ingen osäkerhetsparameter för emissionsfaktorerna');
+    assert.strictEqual(M.DEFAULTS.efEl, 0.037); assert.strictEqual(M.DEFAULTS.efFv, 0.056);
+    near(z2.city.p025, 2 * z1.city.p025, 1e-9, 'dubbla faktorer ger dubbla värden'); near(z2.deso.p975[10], 2 * z1.deso.p975[10], 1e-9);
   });
   test('Intervall för framtida år skalas med effektivisering och emissionsfaktorer', () => {
     const Q = M.params({effektivisering2050: 30, efForandring2050: -20});
