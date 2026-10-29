@@ -1,0 +1,474 @@
+/* MalmoOP 1.0 – gränssnitt. Samma struktur och stil som Vägvis 2.3.1. */
+(function () {
+'use strict';
+const M = window.MalmoOP, $ = id => document.getElementById(id);
+const esc = x => String(x ?? '').replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
+const nf = (x, d = 0) => x == null || !Number.isFinite(x) ? '–' : new Intl.NumberFormat('sv-SE', {maximumFractionDigits: d, minimumFractionDigits: d}).format(x);
+const sig = x => { if (x == null || !Number.isFinite(x)) return '–'; const a = Math.abs(x); return nf(x, a >= 100 ? 0 : a >= 10 ? 1 : a >= 1 ? 2 : 3); };
+const json = id => JSON.parse($(id).textContent);
+const D = {deso: json('d-deso'), land: json('d-land'), energi: json('d-energi'), mob: json('d-mob'), expl: json('d-expl'), meta: json('d-meta')};
+const S = M.prepare(D);
+const COLORS = {energi: '#1baf7a', mobilitet: '#2a78d6', bygg: '#eb6834', mark: '#6250d6', nydrift: '#eda100', nymob: '#e87ba4'};
+const STORE = 'malmoop-1-antaganden';
+const store = {get() { try { return JSON.parse(localStorage.getItem(STORE) || 'null'); } catch (e) { return null; } },
+  set(v) { try { localStorage.setItem(STORE, JSON.stringify(v)); } catch (e) { /* lagring ej tillgänglig */ } }};
+let P = M.params(store.get() || {});
+let R = M.compute(S, P);
+const st = {view: 'overview', metric: 'total', unit: 't', selected: null, osm: true, dev: true, sort: ['total', -1], filter: '', explSort: ['bygg', -1]};
+const props = Object.fromEntries(D.deso.features.map(f => [f.properties.id, f.properties]));
+const areaName = id => { const p = props[id]; return p ? (p.regsoName || p.name) : id; };
+const yearLabel = y => y === 'ack' ? '2030–2050' : String(y);
+const isAck = () => P.ar === 'ack';
+const METRICS = [['total', 'Totalt klimatavtryck'], ['energi', 'Energi i befintliga byggnader'], ['mobilitet', 'Mobilitet i befintlig stad'], ['exploatering', 'Exploatering, summa'], ['bygg', 'Nybyggnation (A1–A5)'], ['mark', 'Förändrad markanvändning'], ['nydrift', 'Nya byggnaders energi'], ['nymob', 'Nya invånares mobilitet']];
+const unitLabel = u => isAck()
+  ? ({t: 't CO₂e 2030–2050', t_ha: 't CO₂e per ha, 2030–2050', kg_ha: 'kg CO₂e per ha, 2030–2050', t_inv: 't CO₂e per invånare, 2030–2050'}[u])
+  : ({t: 't CO₂e per år', t_ha: 't CO₂e per ha och år', kg_ha: 'kg CO₂e per ha och år', t_inv: 't CO₂e per invånare och år'}[u]);
+const mobLabel = () => P.perspektiv === 'A' ? 'A · Trafik inom området' : 'B · Hushållens bilar';
+const changed = () => Object.keys(M.DEFAULTS).some(k => k !== 'ar' && k !== 'perspektiv' && P[k] !== M.DEFAULTS[k]);
+
+function setP(patch) { P = M.params({...P, ...patch}); R = M.compute(S, P); store.set(P); renderChrome(); render(); }
+function cur() { return M.view(S, R, P.ar); }
+const kt = t => nf(t / 1000, t >= 1e6 ? 0 : 1);
+
+/* ---------- ram: sidomeny, rubrik, år ---------- */
+const HEAD = {
+  overview: ['MALMOOP 1.0 · ÖVERSIKT', 'Malmö växer.<br><em>Hela klimatavtrycket.</em>', 'Årligt klimatavtryck per DeSO från energi i befintliga byggnader, mobilitet och utbyggnaden enligt ÖP 2023.'],
+  map: ['DESO 2025 · 209 OMRÅDEN', 'Karta & DeSO', 'Utforska områdena. Välj nyckeltal, enhet och år; klicka på ett område för detaljer.'],
+  calc: ['STEG FÖR STEG', 'Så räknas resultatet', 'Följ beräkningen för ett område, från energideklaration och trafik till nybyggnation och mark.'],
+  parameters: ['ANTAGANDEN', 'Antaganden & scenario', 'Alla värden kan ändras. Beräkningen uppdateras direkt och sparas i din webbläsare.'],
+  expl: ['ÖP 2023 · 36 UTBYGGNADSOMRÅDEN', 'Exploatering 2030–2050', 'Tillkommande BTA, nybyggnation, förändrad markanvändning och det som följer med nya invånare.'],
+  data: ['UNDERLAG', 'Data & kvalitet', 'Urval, adresskoppling, skattad Atemp och energibärare. Allt som påverkar hur resultaten ska tolkas.'],
+  method: ['METOD', 'Metod & källor', 'Formler, systemgränser, antaganden och referenser (Harvard).']
+};
+function renderChrome() {
+  document.querySelectorAll('.model-switch button').forEach(b => b.classList.toggle('active', b.dataset.model === P.perspektiv));
+  document.querySelectorAll('nav .nav').forEach(b => b.classList.toggle('active', b.dataset.view === st.view));
+  $('active-model-label').textContent = (P.perspektiv === 'A' ? 'A · TRAFIK INOM OMRÅDET' : 'B · HUSHÅLLENS BILAR');
+  $('year-switch').innerHTML = [...M.YEARS, 'ack'].map(y => '<button data-year="' + y + '" class="' + (String(P.ar) === String(y) ? 'active' : '') + '">' + (y === 'ack' ? 'Σ 2030–50' : y) + '</button>').join('');
+  const ch = changed(); $('data-status').textContent = ch ? 'Egna antaganden' : 'Grundantaganden'; $('data-status').className = 'pill' + (ch ? ' amber' : '');
+  const [eb, t, d] = HEAD[st.view]; $('eyebrow').textContent = eb; $('page-title').innerHTML = t; $('page-description').textContent = d;
+  $('primary-action').innerHTML = st.view === 'map' ? 'Så räknas området <span>↗</span>' : 'Utforska kartan <span>↗</span>';
+  $('scope-footer').textContent = 'Mobilitet: ' + mobLabel() + ' · Boverkets emissionsfaktorer för el och fjärrvärme';
+}
+
+/* ---------- gemensamma byggstenar ---------- */
+function notice(html, cls = '') { return '<div class="notice ' + cls + '">' + html + '</div>'; }
+function partsCard(row, title, sub) {
+  const total = row.total || 0, max = Math.max(1, ...M.COMPONENTS.map(c => row[c]));
+  return '<article class="card parts"><h2>' + title + '</h2><p class="card-sub">' + sub + '</p>' + M.COMPONENTS.map(c =>
+    '<div class="component-row"><span class="lbl"><i class="sw" style="background:' + COLORS[c] + '"></i>' + esc(M.SHORT[c]) + '</span><div class="track"><div class="fill" style="width:' + (100 * row[c] / max).toFixed(2) + '%;background:' + COLORS[c] + '"></div></div><b class="numeric">' + nf(row[c]) + ' t</b></div>').join('') +
+    '<div class="component-total"><span>Summa</span><span>' + nf(total) + ' t CO₂e' + (isAck() ? '' : ' per år') + '</span></div>' +
+    '<p class="small">Mobilitet visas enligt ' + esc(mobLabel()) + '. Nya invånares mobilitet ' + (P.perspektiv === 'A' ? 'fördelas över vägnätet i proportion till trafiken (A).' : 'räknas i den DeSO där bostäderna byggs (B).') + '</p></article>';
+}
+const charts = [];
+function niceStep(raw) { const p = Math.pow(10, Math.floor(Math.log10(raw))), f = raw / p; return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 2.5 ? 2.5 : f <= 5 ? 5 : 10) * p; }
+function stackChart(id, rows, comps, opts = {}) {
+  charts.push({id, rows, comps, opts});
+  return '<div class="chart-wrap" id="' + id + '" role="img" aria-label="' + esc(opts.aria || 'Stapeldiagram') + '"></div>' +
+    '<div class="chart-legend">' + comps.map(c => '<span><i style="background:' + COLORS[c] + '"></i>' + esc(M.SHORT[c]) + (opts.legendRow ? ' <b>' + nf(opts.legendRow[c]) + ' t</b>' : '') + '</span>').join('') + '</div>';
+}
+function drawCharts() { for (const c of charts) drawChart(c); }
+function drawChart({id, rows, comps, opts}) {
+  const wrap = $(id); if (!wrap) return;
+  const W = Math.max(280, wrap.clientWidth), H = opts.h || 260, L = 44, Rm = 6, T = 22, B = 26, n = rows.length;
+  const tot = rows.map(r => comps.reduce((s, c) => s + r[c], 0)), max = Math.max(1, ...tot);
+  const stepV = niceStep(max / 4), top = Math.ceil(max / stepV) * stepV;
+  const y = v => T + (H - T - B) * (1 - v / top), slot = (W - L - Rm) / n, bw = Math.max(6, Math.min(44, slot * 0.62)), x = i => L + slot * (i + 0.5);
+  const every = Math.max(1, Math.ceil(34 / slot));
+  let g = '<text class="axis-label" x="' + (L - 6) + '" y="' + (T - 10) + '" text-anchor="end">kt</text>';
+  for (let v = 0; v <= top + 1e-9; v += stepV) g += '<line class="gridline" x1="' + L + '" x2="' + (W - Rm) + '" y1="' + y(v) + '" y2="' + y(v) + '"/><text class="axis-label" x="' + (L - 6) + '" y="' + (y(v) + 3) + '" text-anchor="end">' + nf(v / 1000, stepV < 1000 ? 1 : 0) + '</text>';
+  rows.forEach((r, i) => {
+    let acc = 0, segs = '';
+    const live = comps.filter(c => r[c] > 0);
+    live.forEach((c, j) => {
+      const yy = y(acc + r[c]), hh = Math.max(0, y(acc) - yy - (j > 0 ? 2 : 0)), x0 = x(i) - bw / 2, x1 = x(i) + bw / 2, rr = Math.min(4, hh, bw / 2);
+      segs += j === live.length - 1 && hh > 1 ? '<path d="M' + x0 + ',' + (yy + hh) + 'V' + (yy + rr) + 'Q' + x0 + ',' + yy + ' ' + (x0 + rr) + ',' + yy + 'H' + (x1 - rr) + 'Q' + x1 + ',' + yy + ' ' + x1 + ',' + (yy + rr) + 'V' + (yy + hh) + 'Z" fill="' + COLORS[c] + '"/>'
+        : '<rect x="' + x0 + '" y="' + yy + '" width="' + bw + '" height="' + hh + '" fill="' + COLORS[c] + '"/>';
+      acc += r[c];
+    });
+    const sel = opts.sel != null && String(opts.sel) === String(r.key ?? r.year);
+    g += '<g class="bar' + (sel ? ' sel' : '') + '" data-i="' + i + '">' + segs + '</g><rect class="bar-hit" data-i="' + i + '" x="' + (x(i) - slot / 2) + '" y="' + T + '" width="' + slot + '" height="' + (H - T - B + 4) + '"/>';
+    if (i % every === 0 || i === n - 1 || sel) g += '<text class="x-label' + (sel ? ' sel' : '') + '" x="' + x(i) + '" y="' + (H - 8) + '" text-anchor="middle">' + esc(r.label ?? r.year) + '</text>';
+  });
+  wrap.innerHTML = '<svg width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + ' ' + H + '">' + g + '</svg><div class="chart-tip"></div>';
+  bindChart(id, rows, comps, opts.onClick);
+}
+window.addEventListener('resize', () => { clearTimeout(window.__mr); window.__mr = setTimeout(drawCharts, 120); });
+function bindChart(id, rows, comps, onClick) {
+  const wrap = $(id); if (!wrap) return;
+  const tip = wrap.querySelector('.chart-tip');
+  wrap.querySelectorAll('.bar-hit').forEach(h => {
+    const r = rows[+h.dataset.i];
+    h.addEventListener('mousemove', e => {
+      const tot = comps.reduce((s, c) => s + r[c], 0);
+      tip.innerHTML = '<b>' + esc(r.tipTitle || r.label || r.year) + '</b>' + comps.slice().reverse().map(c => '<div><span><i style="background:' + COLORS[c] + '"></i>' + esc(M.SHORT[c]) + '</span><span>' + nf(r[c]) + ' t</span></div>').join('') + '<div class="tip-total"><span>Summa</span><span>' + nf(tot) + ' t</span></div>';
+      tip.style.display = 'block';
+      const b = wrap.getBoundingClientRect(); let lx = e.clientX - b.left + 14; if (lx + 230 > b.width) lx = e.clientX - b.left - 240;
+      tip.style.left = lx + 'px'; tip.style.top = Math.max(0, e.clientY - b.top - 40) + 'px';
+      wrap.querySelectorAll('g.bar').forEach(g => g.classList.toggle('hover', g.dataset.i === h.dataset.i));
+    });
+    h.addEventListener('mouseleave', () => { tip.style.display = 'none'; wrap.querySelectorAll('g.bar').forEach(g => g.classList.remove('hover')); });
+    if (onClick) h.addEventListener('click', () => onClick(r));
+  });
+}
+
+/* ---------- 01 Översikt ---------- */
+function overview() {
+  const v = cur(), c = v.city, byYear = M.cityByYear(R), base = byYear.find(r => r.year === 2024);
+  const sel = isAck() ? null : byYear.find(r => r.year === P.ar);
+  const delta = sel ? (sel.total - base.total) / base.total : null;
+  const chartRows = byYear.filter(r => M.YEARS.includes(r.year));
+  const q = D.energi.urval, meta = D.meta;
+  let h = notice('<strong>Screening för översiktlig planering:</strong> Energi i befintliga byggnader bygger på ' + nf(q.beraknade_deklarationer) + ' energideklarationer, kopplade till DeSO via Malmö stads adresstjänst. Atemp och energibärare saknas i underlaget och <em>skattas</em> (se Data & kvalitet). Mobilitet kommer från Vägvis 2.3.1. Exploateringen följer ÖP 2023:s utbyggnadsområden med Fokus 1 byggt ' + P.f1Start + '–' + (P.f1Slut - 1) + ' och Fokus 2 ' + P.f2Start + '–' + (P.f2Slut - 1) + '.', 'info');
+  h += '<section class="kpis four"><article class="card kpi-main"><div class="kpi-label">Klimatavtryck · ' + yearLabel(P.ar) + '</div><div class="kpi-value">' + kt(c.total) + ' <span class="unit">kt CO₂e' + (isAck() ? '' : ' per år') + '</span></div><div class="kpi-foot">Energi i befintliga byggnader, mobilitet (' + esc(mobLabel()) + ') och exploatering enligt ÖP 2023' + (delta != null && P.ar !== 2024 ? ' · <span class="' + (delta > 0 ? 'delta-up' : 'delta-down') + '">' + (delta > 0 ? '+' : '') + nf(delta * 100, 1) + ' % mot 2024</span>' : '') + '</div></article>' +
+    '<article class="card"><div class="kpi-label">Per invånare</div><div class="kpi-value">' + nf(c.total / c.bef / (isAck() ? 21 : 1), 2) + ' <span class="unit">t CO₂e/år</span></div><div class="kpi-foot">' + nf(c.bef) + ' invånare' + (c.nyaInv > 0 ? ', varav ' + nf(c.nyaInv) + ' i nya bostäder' : '') + (isAck() ? ' (2050). Medel över 21 år.' : '') + '</div></article>' +
+    '<article class="card"><div class="kpi-label">Per hektar</div><div class="kpi-value">' + nf(c.total / c.land_ha / (isAck() ? 21 : 1), 1) + ' <span class="unit">t CO₂e/ha·år</span></div><div class="kpi-foot">' + nf(c.land_ha) + ' ha land, havsytor ej medräknade</div></article>' +
+    '<article class="card"><div class="kpi-label">Exploateringens del</div><div class="kpi-value">' + kt(c.exploatering) + ' <span class="unit">kt</span></div><div class="kpi-foot">' + nf(100 * c.exploatering / Math.max(1, c.total), 1) + ' % av summan · nybyggnation, mark, nya byggnaders energi och mobilitet</div></article></section>';
+  h += '<section class="grid2">' + partsCard(c, 'Klimatavtryckets delar · ' + yearLabel(P.ar), isAck() ? 'Summa för åren 2030–2050, ton CO₂e.' : 'Ton CO₂e under kalenderåret. Hela Malmö, summa av 209 DeSO.') +
+    '<article class="card"><h2>Utveckling 2024–2050</h2><p class="card-sub">Hela Malmö, kt CO₂e per år. Klicka på en stapel för att välja år.</p>' + stackChart('chart-years', chartRows.map(r => ({...r, key: r.year, tipTitle: 'Malmö ' + r.year})), M.COMPONENTS, {sel: P.ar, aria: 'Klimatavtryck per år och komponent', legendRow: sel || null, onClick: r => setP({ar: r.year})}) + '</article></section>';
+  h += '<article class="card"><h2>Underlag och täckning</h2><p class="card-sub">Hur stor del av underlaget som faktiskt ligger på kartan.</p><div class="coverage">' +
+    '<div class="stat"><b>' + nf(q.kartlagda) + '</b><span>av ' + nf(q.beraknade_deklarationer) + ' beräkningsbara energideklarationer kartlagda (' + nf(100 * q.kartlagda / q.beraknade_deklarationer, 1) + ' %)</span></div>' +
+    '<div class="stat"><b>' + nf(meta.adresskoppling.godkanda) + '</b><span>av ' + nf(meta.adresskoppling.totalt) + ' adresser kopplade till DeSO via Malmö stads adresstjänst</span></div>' +
+    '<div class="stat"><b>' + nf(D.expl.omraden.length) + '</b><span>utbyggnadsområden i ÖP 2023 · ' + nf(D.expl.omraden.reduce((s, a) => s + a.bostader, 0)) + ' bostäder, ' + nf(D.expl.omraden.reduce((s, a) => s + a.arbetsplatser, 0)) + ' arbetsplatser</span></div>' +
+    '<div class="stat"><b>209</b><span>DeSO 2025 (SCB) · ' + nf(v.city.land_ha) + ' ha land</span></div></div>' +
+    '<p class="summaryline">Summorna är <strong>inte</strong> en fullständig inventering av Malmös utsläpp. Byggnader utan energideklaration (främst många småhus), industriprocesser, sjöfart, flyg och konsumtion ingår inte. Mobilitet A och B är olika perspektiv och adderas aldrig till varandra.</p>' +
+    '<div class="button-row"><button class="secondary" data-view="map">Utforska DeSO på kartan →</button><button class="secondary" data-view="parameters">Ändra antaganden →</button><button class="secondary" data-view="data">Se datakvalitet →</button></div></article>';
+  return h;
+}
+
+/* ---------- 02 Karta ---------- */
+let map = null, layers = {}, devLayer = null, tiles = null, selectedLayer = null;
+const OPAQUE = .85, SEE = .55;
+function rampColor(t) { return 'rgb(' + Math.round(223 - 208 * t) + ',' + Math.round(235 - 136 * t) + ',' + Math.round(207 - 119 * t) + ')'; }
+function classes(vals) {
+  const v = vals.filter(x => x != null && x > 0).sort((a, b) => a - b); if (!v.length) return [];
+  const q = k => v[Math.min(v.length - 1, Math.floor(k * v.length))];
+  const br = [v[0], q(.2), q(.4), q(.6), q(.8), v[v.length - 1]];
+  return br.filter((b, i) => i === 0 || b > br[i - 1]);
+}
+function colorFor(x, br) { if (x == null || !(x > 0) || !br.length) return '#e3e8e4'; let k = 0; while (k < br.length - 2 && x > br[k + 1]) k++; const n = Math.max(1, br.length - 1); return rampColor((k + .5) / n); }
+function mapView() {
+  const v = cur();
+  const opts = METRICS.map(([k, l]) => '<option value="' + k + '"' + (st.metric === k ? ' selected' : '') + '>' + l + '</option>').join('');
+  const units = ['t', 't_ha', 'kg_ha', 't_inv'].map(u => '<option value="' + u + '"' + (st.unit === u ? ' selected' : '') + '>' + unitLabel(u) + '</option>').join('');
+  let h = '<article class="card"><div class="map-toolbar2"><label class="inline">Nyckeltal <select id="metric">' + opts + '</select></label><label class="inline">Enhet <select id="unit">' + units + '</select></label><span class="pill">' + esc(mobLabel()) + ' · ' + yearLabel(P.ar) + '</span></div>' +
+    '<div class="map-checks"><label><input type="checkbox" id="map-osm"' + (st.osm ? ' checked' : '') + '> OpenStreetMap</label><label><input type="checkbox" id="map-dev"' + (st.dev ? ' checked' : '') + '> Utbyggnadsområden ÖP 2023</label><button class="map-fit secondary small-btn" id="map-fit">Hela kommunen</button></div>' +
+    '<div class="map-layout"><div><div class="map-surface" id="map-surface"></div><p class="small" id="map-status"></p></div><aside class="area-detail" id="area-detail"></aside></div></article>';
+  h += '<article class="card"><div class="row wrap"><div><h2>Alla DeSO</h2><p class="card-sub">' + esc(unitLabel(st.unit)) + ' · ' + yearLabel(P.ar) + '. Klicka på en rad för att visa området; klicka på en kolumnrubrik för att sortera.</p></div><input class="input" id="table-filter" placeholder="Sök DeSO-kod eller område" value="' + esc(st.filter) + '" style="max-width:320px"></div><div class="table-wrap area-table" id="deso-table"></div></article>';
+  return h;
+}
+function metricVals(v) { return v.rows.map(r => M.metric(r, st.metric, st.unit)); }
+function drawMap() {
+  const v = cur(), vals = metricVals(v), br = classes(vals), byId = Object.fromEntries(v.rows.map((r, i) => [r.id, vals[i]]));
+  if (map) { map.remove(); map = null; } layers = {};
+  const L = window.L, land = D.land;
+  map = L.map('map-surface', {scrollWheelZoom: false, zoomSnap: .25, attributionControl: false});
+  const LandSVG = L.SVG.extend({
+    _initContainer() { L.SVG.prototype._initContainer.call(this); const ns = 'http://www.w3.org/2000/svg', defs = document.createElementNS(ns, 'defs'); this._landClip = document.createElementNS(ns, 'clipPath'); this._clipID = 'malmoop-land-' + L.Util.stamp(this); this._landClip.setAttribute('id', this._clipID); this._landClip.setAttribute('clipPathUnits', 'userSpaceOnUse'); defs.appendChild(this._landClip); this._container.appendChild(defs); this._rootGroup.setAttribute('clip-path', 'url(#' + this._clipID + ')'); },
+    _update() { L.SVG.prototype._update.call(this); if (!this._map || !this._landClip) return; const p = x => { const a = this._map.latLngToLayerPoint([x[1], x[0]]); return [a.x, a.y]; }; this._landClip.innerHTML = land.features.map(f => '<path clip-rule="evenodd" fill-rule="evenodd" d="' + polyPath(f.geometry, p) + '"/>').join(''); }
+  });
+  const renderer = new LandSVG({padding: .5});
+  const layer = L.geoJSON(D.deso, {renderer, style: f => ({color: '#ffffff', weight: .7, opacity: .95, fillColor: colorFor(byId[f.properties.id], br), fillOpacity: st.osm ? SEE : OPAQUE}),
+    onEachFeature(f, l) {
+      const id = f.properties.id; layers[id] = l;
+      l.bindTooltip(() => '<b>' + esc(id) + '</b> · ' + esc(areaName(id)) + '<br>' + sig(byId[id]) + ' ' + esc(unitLabel(st.unit)), {sticky: true, className: 'map-tip'});
+      l.on('click', () => selectArea(id, false));
+      l.on('mouseover', () => { if (id !== st.selected) l.setStyle({weight: 2.2, color: '#0b463a'}); });
+      l.on('mouseout', () => { if (id !== st.selected) l.setStyle({weight: .7, color: '#ffffff'}); });
+    }}).addTo(map);
+  devLayer = L.geoJSON({type: 'FeatureCollection', features: D.expl.omraden.map(a => ({type: 'Feature', properties: a, geometry: a.geometry}))}, {
+    style: f => ({color: '#a76019', weight: 2.2, opacity: .95, fill: true, fillOpacity: 0, dashArray: f.properties.fokus === 2 ? '6 5' : null}),
+    onEachFeature(f, l) { const a = f.properties, [s, e] = a.fokus === 1 ? [P.f1Start, P.f1Slut] : [P.f2Start, P.f2Slut];
+      l.bindTooltip('<b>' + esc(a.namn) + '</b><br>' + esc(a.kategori) + ' · Fokus ' + a.fokus + ' · byggs ' + s + '–' + (e - 1) + '<br>' + nf(a.bostader) + ' bostäder · ' + nf(a.arbetsplatser) + ' arbetsplatser · ' + nf(a.ha, 1) + ' ha', {sticky: true, className: 'map-tip dev-tip'}); }
+  });
+  if (st.dev) devLayer.addTo(map);
+  const lc = L.control({position: 'bottomright'});
+  lc.onAdd = () => { const d = L.DomUtil.create('div', 'map-legend'); d.innerHTML = legendHtml(br); L.DomEvent.disableClickPropagation(d); return d; }; lc.addTo(map);
+  const bounds = L.geoJSON(land).getBounds(); map.fitBounds(bounds, {padding: [12, 12]});
+  tiles = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom: 19, referrerPolicy: 'strict-origin-when-cross-origin', attribution: '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors'});
+  const local = location.protocol === 'file:';
+  function refreshOsm() {
+    if (local) { $('map-osm').checked = false; $('map-osm').disabled = true; layer.setStyle({fillOpacity: OPAQUE}); $('map-status').textContent = 'Offlinekarta. Bakgrundskartan visas när appen körs via Streamlit. Beräkningen fungerar ändå.'; return; }
+    if (st.osm) { tiles.addTo(map); tiles.bringToBack(); layer.setStyle({fillOpacity: SEE}); $('map-surface').classList.add('osm-on'); $('map-status').textContent = 'OpenStreetMap · bakgrundskartan kräver internet. Havsytor är bortklippta i visningen; beräkningen använder SCB:s DeSO-gränser.'; }
+    else { map.removeLayer(tiles); layer.setStyle({fillOpacity: OPAQUE}); $('map-surface').classList.remove('osm-on'); $('map-status').textContent = 'Bakgrund avstängd · områdeskartan fungerar utan internet.'; }
+  }
+  let fails = 0; tiles.on('tileerror', () => { if (++fails > 2) $('map-status').textContent = 'Bakgrundskartan kunde inte hämtas. Områdeskartan och beräkningen fungerar ändå.'; });
+  $('map-osm').onchange = e => { st.osm = e.target.checked; refreshOsm(); }; refreshOsm();
+  $('map-dev').onchange = e => { st.dev = e.target.checked; if (st.dev) devLayer.addTo(map); else map.removeLayer(devLayer); };
+  $('map-fit').onclick = () => map.fitBounds(bounds, {padding: [12, 12]});
+  L.control.attribution({position: 'bottomleft', prefix: '<a href="https://leafletjs.com" target="_blank" rel="noopener">Leaflet</a>'}).addTo(map).addAttribution('Områden: SCB DeSO 2025 · Utbyggnadsområden: Malmö stad ÖP 2023');
+  setTimeout(() => map && map.invalidateSize(), 60);
+  if (st.selected) highlight(st.selected);
+}
+function polyPath(g, project) { return (g.type === 'Polygon' ? [g.coordinates] : g.coordinates).map(p => p.map(r => r.map((x, i) => (i ? 'L' : 'M') + project(x).join(',')).join('') + 'Z').join('')).join(''); }
+function legendHtml(br) {
+  const n = br.length - 1, f = x => sig(x);
+  let h = '<b>' + esc(METRICS.find(m => m[0] === st.metric)[1]) + '</b><small style="margin:0 0 5px">' + esc(unitLabel(st.unit)) + '</small>';
+  for (let k = 0; k < n; k++) h += '<span><i style="background:' + rampColor((k + .5) / n) + '"></i>' + f(br[k]) + '–' + f(br[k + 1]) + '</span>';
+  h += '<span><i class="nodata" style="background:#e3e8e4"></i>Noll eller saknas</span>';
+  if (st.dev) h += '<span><i class="dev1"></i>Fokus 1</span><span><i class="dev2"></i>Fokus 2</span>';
+  return h;
+}
+function highlight(id) {
+  for (const [k, l] of Object.entries(layers)) l.setStyle({weight: k === id ? 3 : .7, color: k === id ? '#0b2e28' : '#ffffff'});
+  if (layers[id]) layers[id].bringToFront();
+}
+function selectArea(id, zoom) {
+  st.selected = id; highlight(id); detail(); table();
+  if (zoom && map && layers[id]) map.fitBounds(layers[id].getBounds(), {padding: [60, 60], maxZoom: 14});
+}
+function detail() {
+  const el = $('area-detail'); if (!el) return;
+  const v = cur(), id = st.selected;
+  if (!id) {
+    const c = v.city;
+    el.innerHTML = '<div class="ad-head"><span class="ad-kicker">Hela kommunen · 209 DeSO</span><h3>Malmö</h3></div><div class="ad-hero"><b>' + nf(c.total) + '</b><span>' + (isAck() ? 't CO₂e 2030–2050' : 't CO₂e per år') + ' · ' + yearLabel(P.ar) + '</span><small>Mobilitet enligt ' + esc(mobLabel()) + '</small></div>' +
+      '<dl class="ad-facts"><div><dt>Invånare</dt><dd>' + nf(c.bef) + '</dd></div><div><dt>Yta utan hav</dt><dd>' + nf(c.land_ha) + ' ha</dd></div><div><dt>Per hektar</dt><dd>' + nf(c.total / c.land_ha, 1) + ' t</dd></div><div><dt>Per invånare</dt><dd>' + nf(c.total / c.bef, 2) + ' t</dd></div></dl>' +
+      partsMini(c) + '<p class="small ad-note">Klicka på ett område på kartan eller i tabellen.</p>';
+    return;
+  }
+  const rows = v.rows, r = rows.find(x => x.id === id), val = M.metric(r, st.metric, st.unit);
+  const sorted = rows.map(x => M.metric(x, st.metric, st.unit)).filter(x => x != null).sort((a, b) => b - a), rank = sorted.indexOf(val) + 1;
+  const p = props[id], mA = D.mob.A[id], mB = D.mob[R.bKey][id], eb = R.energyBase, i = S.index[id];
+  const mob = P.perspektiv === 'A' ? mA : mB;
+  el.innerHTML = '<div class="ad-head"><span class="ad-kicker">DeSO ' + esc(id) + ' · RegSO ' + esc(p.regso) + '</span><h3>' + esc(areaName(id)) + '</h3></div>' +
+    '<div class="ad-hero"><b>' + sig(val) + '</b><span>' + esc(unitLabel(st.unit)) + '</span><small>' + esc(METRICS.find(m => m[0] === st.metric)[1]) + ' · ' + yearLabel(P.ar) + '</small></div>' +
+    '<div class="ad-rank">Plats ' + rank + ' av ' + sorted.length + '<small>1 = högst värde i Malmö</small><i><em style="left:' + (100 * (1 - (rank - 1) / Math.max(1, sorted.length - 1))).toFixed(1) + '%"></em></i></div>' +
+    '<dl class="ad-facts"><div><dt>Totalt</dt><dd>' + nf(r.total) + ' t<small>' + (isAck() ? '2030–2050' : 'per år') + '</small></dd></div><div><dt>Yta utan hav</dt><dd>' + nf(r.land_ha, 1) + ' ha</dd></div>' +
+    '<div><dt>Invånare</dt><dd>' + nf(r.bef) + (r.nyaInv > 0 ? '<small>varav ' + nf(r.nyaInv) + ' nya</small>' : '<small>2024</small>') + '</dd></div><div><dt>Energideklarationer</dt><dd>' + nf(eb.count[i], 1) + '<small>' + nf(eb.atemp[i]) + ' m² Atemp (skattad)</small></dd></div>' +
+    '<div><dt>Mobilitet 2024</dt><dd>' + nf(mob ? mob.total : null) + ' t<small class="ad-intervall">95 %: ' + (mob ? nf(mob.p025) + '–' + nf(mob.p975) : '–') + ' t</small></dd></div><div><dt>Per invånare</dt><dd>' + (r.bef > 0 ? nf(r.total / r.bef, 2) + ' t' : '–') + '</dd></div></dl>' +
+    partsMini(r) + '<button class="secondary ad-button" data-view="calc">Så räknas området →</button>';
+}
+function partsMini(r) {
+  const tot = Math.max(1e-9, r.total);
+  return '<div class="ad-parts"><h4>Klimatavtryckets delar</h4>' + M.COMPONENTS.filter(c => r[c] > 0 || c === 'energi' || c === 'mobilitet').map(c => '<div class="ad-part"><span>' + esc(M.SHORT[c]) + '</span><b>' + nf(100 * r[c] / tot) + ' %</b><i><em style="width:' + (100 * r[c] / tot).toFixed(1) + '%;background:' + COLORS[c] + '"></em></i></div>').join('') + '</div>';
+}
+function table() {
+  const el = $('deso-table'); if (!el) return;
+  const v = cur(), f = st.filter.trim().toLowerCase();
+  const cols = [['id', 'DeSO'], ['total', 'Totalt'], ['energi', 'Energi befintliga'], ['mobilitet', 'Mobilitet'], ['exploatering', 'Exploatering'], ['bef', 'Invånare'], ['per', unitLabel(st.unit)]];
+  let rows = v.rows.map(r => ({...r, per: M.metric(r, st.metric, st.unit)}));
+  if (f) rows = rows.filter(r => r.id.toLowerCase().includes(f) || areaName(r.id).toLowerCase().includes(f));
+  const [k, dir] = st.sort;
+  rows.sort((a, b) => k === 'id' ? dir * a.id.localeCompare(b.id) : dir * ((a[k] ?? -1) - (b[k] ?? -1)));
+  el.innerHTML = '<table class="tbl-sort"><thead><tr><th class="rank">#</th>' + cols.map(([c, l]) => '<th data-sort="' + c + '" class="' + (c !== 'id' ? 'numeric ' : '') + (k === c ? 'sorted' + (dir > 0 ? ' asc' : '') : '') + '">' + esc(l) + '</th>').join('') + '</tr></thead><tbody>' +
+    rows.map((r, n) => '<tr data-id="' + r.id + '" class="' + (r.id === st.selected ? 'sel' : '') + '"><td class="rank">' + (n + 1) + '</td><td><button class="link-btn" data-id="' + r.id + '">' + esc(r.id) + '</button><small>' + esc(areaName(r.id)) + '</small></td><td class="numeric">' + nf(r.total) + '</td><td class="numeric">' + nf(r.energi) + '</td><td class="numeric">' + nf(r.mobilitet) + '</td><td class="numeric">' + nf(r.exploatering) + '</td><td class="numeric">' + nf(r.bef) + '</td><td class="numeric">' + sig(r.per) + '</td></tr>').join('') + '</tbody></table>';
+  el.querySelectorAll('th[data-sort]').forEach(th => th.onclick = () => { const c = th.dataset.sort; st.sort = [c, st.sort[0] === c ? -st.sort[1] : (c === 'id' ? 1 : -1)]; table(); });
+  el.querySelectorAll('tbody tr').forEach(tr => tr.onclick = () => { selectArea(tr.dataset.id, true); $('map-surface').scrollIntoView({behavior: 'smooth', block: 'center'}); });
+}
+
+/* ---------- 03 Så räknas resultatet ---------- */
+function calcView() {
+  const v = cur(), rows = v.rows;
+  const id = st.selected || rows.slice().sort((a, b) => b.total - a.total)[0].id;
+  const r = rows.find(x => x.id === id), i = S.index[id], E = D.energi.kolumner, eb = R.energyBase;
+  const opts = rows.slice().sort((a, b) => a.id.localeCompare(b.id)).map(x => '<option value="' + x.id + '"' + (x.id === id ? ' selected' : '') + '>' + esc(x.id + ' · ' + areaName(x.id)) + '</option>').join('');
+  // deklarationer i området
+  const decl = [];
+  for (let k = 0; k < E.id.length; k++) for (const [d, w] of E.alloc[k]) if (d === i) {
+    const a = P.atempLage === 'fast' ? P.atempFast : (E.bta[k] > 0 ? E.bta[k] * P.atempFaktor : S.btaMedian * P.atempFaktor), s = P.elLage === 'fast' ? P.elFast : E.el[k];
+    decl.push({id: E.id[k], fast: E.fast[k], klass: E.klass[k], se: E.se[k], a, s, w, t: E.se[k] * a * (s * P.efEl + (1 - s) * P.efFv) / 1000 * w, btak: D.energi.koder.btak[E.btak[k]], elk: D.energi.koder.elk[E.elk[k]]});
+  }
+  decl.sort((a, b) => b.t - a.t);
+  const mA = D.mob.A[id], mB = D.mob[R.bKey][id], hh = D.mob.hushall[id] || {};
+  const yi = isAck() ? null : R.years.indexOf(P.ar), f = isAck() ? null : (P.ar - 2024) / 26;
+  const pieces = [];
+  for (const a of D.expl.omraden) for (const d of a.delar) if (d.deso === id) pieces.push({a, d});
+  let h = '<article class="card"><div class="row wrap calc-top"><div><h2>' + esc(areaName(id)) + ' · ' + esc(id) + '</h2><p class="card-sub">' + esc(yearLabel(P.ar)) + ' · mobilitet enligt ' + esc(mobLabel()) + '</p></div><label class="calc-pick field">Välj DeSO<select id="calc-pick">' + opts + '</select></label></div>' +
+    '<div class="calc-tiles"><div><b>' + nf(r.total) + '</b><span>t CO₂e ' + (isAck() ? '2030–2050' : 'per år') + '</span></div><div><b>' + nf(r.land_ha, 1) + '</b><span>hektar land</span></div><div><b>' + sig(r.total / Math.max(1e-9, r.land_ha)) + '</b><span>t CO₂e per ha' + (isAck() ? '' : ' och år') + '</span></div><div><b>' + nf(r.bef) + '</b><span>invånare' + (r.nyaInv ? ' (' + nf(r.nyaInv) + ' nya)' : '') + '</span></div></div>';
+  h += '<div class="calc-step"><div class="calc-n">1</div><div class="calc-body"><h3>Energi i befintliga byggnader</h3><div class="formula calc-formula">t CO₂e = Σ energiprestanda × Atemp × (elandel × ' + nf(P.efEl, 3) + ' + (1 − elandel) × ' + nf(P.efFv, 3) + ') / 1 000 × adressandel</div>' +
+    '<p>Energiprestanda (kWh/m² Atemp och år) kommer från deklarationen. Atemp ' + (P.atempLage === 'osm' ? 'skattas ur OpenStreetMap-byggnadens fotavtryck × antal våningar × ' + nf(P.atempFaktor, 2) : 'sätts till ' + nf(P.atempFast) + ' m² per deklaration') + '. Elandelen ' + (P.elLage === 'kvot' ? 'skattas ur kvoten primärenergital/energiprestanda' : 'sätts till ' + nf(100 * P.elFast) + ' %') + '; resten antas vara fjärrvärme. Emissionsfaktorerna är Boverkets.</p>' +
+    '<div class="calc-result"><div><span class="lbl">Deklarationer (vägt)</span><b>' + nf(eb.count[i], 1) + '</b></div><div><span class="lbl">Atemp</span><b>' + nf(eb.atemp[i]) + ' m²</b></div><div><span class="lbl">Levererad energi</span><b>' + nf(eb.kwh[i] / 1e6, 2) + ' GWh</b></div><div><span class="lbl">2024</span><b>' + nf(eb.t[i]) + ' t</b></div><div><span class="lbl">' + yearLabel(P.ar) + '</span><b>' + nf(r.energi) + ' t</b></div></div>' +
+    (decl.length ? '<details class="calc-details"><summary>Deklarationer i området (' + decl.length + ')</summary><div class="table-wrap calc-full"><table><thead><tr><th>ID</th><th>Fastighet</th><th>Klass</th><th class="numeric">kWh/m²</th><th class="numeric">Atemp m²</th><th>Atemp-källa</th><th class="numeric">Elandel</th><th>Elandel-källa</th><th class="numeric">Andel</th><th class="numeric">t CO₂e 2024</th></tr></thead><tbody>' +
+      decl.slice(0, 200).map(x => '<tr><td>' + x.id + '</td><td>' + esc(x.fast) + '</td><td>' + esc(x.klass) + '</td><td class="numeric">' + nf(x.se) + '</td><td class="numeric">' + nf(x.a) + '</td><td>' + esc(x.btak.replace(/_/g, ' ')) + '</td><td class="numeric">' + nf(100 * x.s) + ' %</td><td>' + esc(x.elk.replace(/_/g, ' ')) + '</td><td class="numeric">' + nf(100 * x.w) + ' %</td><td class="numeric">' + nf(x.t, 1) + '</td></tr>').join('') + '</tbody></table></div></details>' : '<p class="small">Inga energideklarationer är kopplade till området.</p>') + '</div></div>';
+  h += '<div class="calc-step"><div class="calc-n">2</div><div class="calc-body"><h3>Mobilitet i befintlig stad</h3><div class="formula calc-formula">' + (P.perspektiv === 'A' ? 'A: trafik på vägar i området (vägar × trafikmängd), livscykel' : 'B: hushållens bilar × körsträcka × livscykelfaktor') + ' × flottfaktor × trafikförändring</div>' +
+    '<p>Värdet 2024 kommer från Vägvis 2.3.1 med 3 000 iterationer. A är kalibrerad mot Malmös direkta vägtrafikutsläpp 2024. B ' + (R.bKey === 'B_gtfs' ? 'använder DeSO-skattad körsträcka med GTFS-utbud' : 'använder kommunens körsträcka per bil') + '. A och B adderas aldrig.</p>' +
+    '<div class="calc-result"><div><span class="lbl">A 2024</span><b>' + nf(mA && mA.total) + ' t</b><small class="ad-intervall">95 %: ' + (mA ? nf(mA.p025) + '–' + nf(mA.p975) : '–') + '</small></div><div><span class="lbl">B 2024</span><b>' + nf(mB && mB.total) + ' t</b><small class="ad-intervall">95 %: ' + (mB ? nf(mB.p025) + '–' + nf(mB.p975) : '–') + '</small></div><div><span class="lbl">Bilar / hushåll</span><b>' + (hh.hh ? nf(hh.bil / hh.hh, 2) : '–') + '</b></div><div><span class="lbl">Flottfaktor ' + yearLabel(P.ar) + '</span><b>' + (isAck() ? 'per år' : nf(M.fleet(P, P.ar), 2)) + '</b></div><div><span class="lbl">' + yearLabel(P.ar) + '</span><b>' + nf(r.mobilitet) + ' t</b></div></div></div></div>';
+  h += '<div class="calc-step"><div class="calc-n">3</div><div class="calc-body"><h3>Exploatering enligt ÖP 2023</h3>' +
+    '<div class="formula calc-formula">Nybyggnation = BTA × klimatfaktor (kg CO₂e/m² BTA) / 1 000, fördelat jämnt över byggåren<br>Mark = ha × hårdgörandel × (kolförråd före − ' + nf(P.kolBebyggd) + ' t C/ha) × 44/12, under byggåren<br>Nya byggnaders energi = BTA × ' + nf(P.atempNy, 2) + ' × ' + nf(P.energiNy) + ' kWh/m² × emissionsfaktor · när de är klara</div>' +
+    (pieces.length ? '<div class="table-wrap calc-full"><table><thead><tr><th>Utbyggnadsområde</th><th>Fokus</th><th class="numeric">Andel i DeSO</th><th class="numeric">Bostäder</th><th class="numeric">Arbetsplatser</th><th class="numeric">Åker ha</th><th class="numeric">Öppen ha</th><th class="numeric">Bebyggd ha</th><th class="numeric">Okänd ha</th></tr></thead><tbody>' +
+      pieces.map(({a, d}) => '<tr><td>' + esc(a.namn) + '</td><td><span class="chip f' + a.fokus + '">Fokus ' + a.fokus + '</span></td><td class="numeric">' + nf(100 * d.andel) + ' %</td><td class="numeric">' + nf(a.bostader * d.andel) + '</td><td class="numeric">' + nf(a.arbetsplatser * d.andel) + '</td><td class="numeric">' + nf(d.mark.aker, 1) + '</td><td class="numeric">' + nf(d.mark.oppen, 1) + '</td><td class="numeric">' + nf(d.mark.bebyggd, 1) + '</td><td class="numeric">' + nf(d.mark.okand, 1) + '</td></tr>').join('') + '</tbody></table></div>' : '<p class="small">Inget av ÖP 2023:s utbyggnadsområden ligger i denna DeSO. Exploateringsposterna kan ändå vara större än noll i modell A, där nya invånares trafik fördelas över hela vägnätet.</p>') +
+    '<div class="calc-result"><div><span class="lbl">Nybyggnation</span><b>' + nf(r.bygg) + ' t</b></div><div><span class="lbl">Mark</span><b>' + nf(r.mark) + ' t</b></div><div><span class="lbl">Nya byggnaders energi</span><b>' + nf(r.nydrift) + ' t</b></div><div><span class="lbl">Ny mobilitet</span><b>' + nf(r.nymob) + ' t</b></div></div></div></div>';
+  h += '<div class="calc-step"><div class="calc-n">4</div><div class="calc-body"><h3>Summa och nyckeltal</h3><div class="formula calc-formula">Totalt = energi + mobilitet + nybyggnation + mark + nya byggnaders energi + ny mobilitet = ' + nf(r.total) + ' t</div>' +
+    '<p>Per hektar delas med områdets landyta utan hav (' + nf(r.land_ha, 1) + ' ha). Per invånare delas med folkmängden 2024 plus nya invånare som flyttat in till och med valt år.</p></div></div></article>';
+  return h;
+}
+
+/* ---------- 04 Antaganden ---------- */
+const FIELDS = [
+  ['Perspektiv och underlag', 'Välj hur mobiliteten ska räknas. A och B är olika perspektiv och adderas aldrig.', [
+    ['perspektiv', 'Mobilitet', 'select', [['A', 'A · Trafik inom området (Vägvis)'], ['B', 'B · Hushållens bilar (Vägvis)']], 'Vägvis 2.3.1. A: alla fordon på vägar i området inkl. genomfart. B: bilar registrerade på hushåll i området.'],
+    ['bLage', 'Körsträcka i modell B', 'select', [['local', 'Kommunens körsträcka per bil (Vägvis standard)'], ['gtfs', 'DeSO-skattning med GTFS-utbud 2024']], 'Påverkar fördelningen mellan DeSO i B; Malmös summa är densamma.']]],
+  ['Energi i befintliga byggnader', 'Energideklarationerna saknar uppvärmd area och energibärare. Båda skattas och kan ersättas här.', [
+    ['efEl', 'El, kg CO₂e/kWh', 'number', 0.001, 'Boverkets klimatdatabas, svensk elmix (Boverket, 2026a).'],
+    ['efFv', 'Fjärrvärme, kg CO₂e/kWh', 'number', 0.001, 'Boverkets klimatdatabas, svenskt medelvärde (Boverket, 2026a). Ej Malmöspecifik.'],
+    ['atempLage', 'Atemp per deklaration', 'select', [['osm', 'Skattad ur OSM-byggnader (fotavtryck × våningar)'], ['fast', 'Samma yta för alla deklarationer']], 'OSM: OpenStreetMap-bidragsgivare. Se Data & kvalitet för våningskällor.'],
+    ['atempFaktor', 'Atemp / BTA', 'number', 0.01, 'Andel av bruttoarean som är uppvärmd area. Antagande.'],
+    ['atempFast', 'Fast Atemp, m² per deklaration', 'number', 50, 'Används bara i läget "samma yta".'],
+    ['elLage', 'Elandel av levererad energi', 'select', [['kvot', 'Skattad ur primärenergital / energiprestanda'], ['fast', 'Samma andel för alla']], 'Kvotmetod: se Metod & källor.'],
+    ['elFast', 'Fast elandel (0–1)', 'number', 0.01, 'Används bara i läget "samma andel". Resten fjärrvärme.'],
+    ['effektivisering2050', 'Energieffektivisering till 2050, %', 'number', 1, 'Lägre levererad energi i befintligt bestånd, linjärt från 2024. Känslighetsberäkning.'],
+    ['efForandring2050', 'Förändrade emissionsfaktorer till 2050, %', 'number', 1, 'Gäller el och fjärrvärme i både befintliga och nya byggnader. Negativt = lägre utsläpp.']]],
+  ['Mobilitet', 'Utgångsläget 2024 kommer från Vägvis. Framtiden styrs av två enkla faktorer.', [
+    ['trafikForandring2050', 'Förändrat trafikarbete till 2050, %', 'number', 1, 'Befintlig stad, linjärt från 2024. Nya invånares trafik läggs till separat.'],
+    ['flotta2030', 'Flottans klimatfaktor 2030', 'number', 0.01, 'Livscykelutsläpp per fordonskilometer relativt 2024 (1 = oförändrad flotta).'],
+    ['flotta2040', 'Flottans klimatfaktor 2040', 'number', 0.01, 'Interpoleras linjärt mellan åren.'],
+    ['flotta2050', 'Flottans klimatfaktor 2050', 'number', 0.01, 'Sätt t.ex. 0,3 för en kraftigt elektrifierad flotta.'],
+    ['bilFaktor', 'Bilar per nytt hushåll (relativt värd-DeSO)', 'number', 0.05, '1 = som befintliga hushåll i samma DeSO 2024 (SCB via Vägvis).'],
+    ['andelKmInomMalmo', 'Andel av nya bilars körning på Malmös vägar (A)', 'number', 0.05, 'Används bara i perspektiv A. Antagande.'],
+    ['personerPerBostad', 'Invånare per ny bostad', 'number', 0.01, 'Malmö 2024: 365 644 invånare / 172 941 hushåll.']]],
+  ['Exploatering – tidsplan och volymer', 'ÖP 2023: Fokus 1 detaljplaneras före 2030, Fokus 2 därefter. Byggåren fördelas jämnt.', [
+    ['exploatering', 'Räkna med exploatering', 'select', [['true', 'Ja'], ['false', 'Nej, bara befintlig stad']], ''],
+    ['f1Start', 'Fokus 1 · första byggår', 'number', 1, 'Standard 2030.'], ['f1Slut', 'Fokus 1 · klart år', 'number', 1, 'Standard 2040 (byggs 2030–2039).'],
+    ['f2Start', 'Fokus 2 · första byggår', 'number', 1, 'Standard 2040.'], ['f2Slut', 'Fokus 2 · klart år', 'number', 1, 'Standard 2050 (byggs 2040–2049).'],
+    ['btaBostad', 'BTA per bostad, m²', 'number', 1, 'Antagande, inkl. väggar, trapphus och biutrymmen.'],
+    ['btaArbBlandad', 'BTA per arbetsplats i blandad stad, m²', 'number', 1, 'Kontor och service. Antagande.'],
+    ['btaArbVerks', 'BTA per arbetsplats i verksamhetsområde, m²', 'number', 1, 'Logistik och industri. Antagande.'],
+    ['btaSkolplats', 'BTA per förskole-/skolplats, m²', 'number', 1, 'Antagande.']]],
+  ['Exploatering – klimatfaktorer', 'Uppförande (A1–A5) och drift av de nya byggnaderna.', [
+    ['klimatBygg', 'Klimatpåverkan vid uppförande', 'select', [['gransvarde2030', 'Boverkets föreslagna gränsvärden 2030'], ['referens', 'Dagens referensvärden (median)'], ['bana', 'Indikativ bana: gränsvärde 2030 → −90 % 2040']], 'Boverket (2026b), utkast till färdplan: flerbostadshus 358 → 235, kontor/skola 383 → 250, hallbyggnader 291 → 190 kg CO₂e/m² BTA.'],
+    ['atempNy', 'Atemp / BTA i nya byggnader', 'number', 0.01, 'Antagande.'],
+    ['energiNy', 'Energi i nya byggnader, kWh/m² Atemp och år', 'number', 1, 'Median för klass A–B, ≥ 1 000 m² BTA, i Malmö-underlaget.'],
+    ['elandelNy', 'Elandel i nya byggnader (0–1)', 'number', 0.01, 'Median i samma urval.']]],
+  ['Markanvändning', 'Kolförråd före och efter exploatering. Andelen som inte hårdgörs behåller sitt förråd.', [
+    ['hardgorandel', 'Andel som bebyggs eller hårdgörs (0–1)', 'number', 0.05, 'Antagande. Resten antas bli park eller gröna ytor.'],
+    ['markOkand', 'Mark utan OSM-klass antas vara', 'select', [['bebyggd', 'Redan bebyggd/hårdgjord'], ['oppen', 'Öppen mark med vegetation'], ['aker', 'Åkermark']], 'Försiktigt standardval: ingen kolförlust för oklassad mark.'],
+    ['kolAker', 'Åkermark, t C/ha', 'number', 1, 'Minerogen åkermark (Länsstyrelsen i Uppsala län, 2025, tabell 2). Proxy för Skåne.'],
+    ['kolOppen', 'Öppen mark med vegetation, t C/ha', 'number', 1, 'Biomassa + förna + markkol (samma källa, tabell 6).'],
+    ['kolSkog', 'Skog på fastmark, t C/ha', 'number', 1, 'Samma källa, tabell 6.'],
+    ['kolBebyggd', 'Anlagd och bebyggd mark, t C/ha', 'number', 1, 'Kolförrådet efter exploatering (samma källa, tabell 6).']]]
+];
+function paramsView() {
+  return FIELDS.map(([title, sub, fields]) => '<article class="card field-group"><h2>' + esc(title) + '</h2><p class="card-sub">' + esc(sub) + '</p><div class="controls">' + fields.map(([k, label, type, a, src]) => {
+    const val = P[k], ch = String(val) !== String(M.DEFAULTS[k]);
+    const input = type === 'select' ? '<select data-p="' + k + '">' + a.map(([v, l]) => '<option value="' + v + '"' + (String(val) === v ? ' selected' : '') + '>' + esc(l) + '</option>').join('') + '</select>'
+      : '<input class="input" type="number" data-p="' + k + '" step="' + a + '" value="' + val + '">';
+    return '<div class="field"><label>' + esc(label) + (ch ? '<span class="changed-dot" title="Ändrat från standard (' + esc(M.DEFAULTS[k]) + ')"></span>' : '') + '</label>' + input + '<span class="src">' + esc(src) + (ch ? ' Standard: ' + esc(M.DEFAULTS[k]) + '.' : '') + '</span></div>';
+  }).join('') + '</div></article>').join('') + '<article class="card"><div class="button-row"><button class="primary" id="reset-params">Återställ alla standardvärden</button><button class="secondary" data-view="overview">Se resultatet →</button></div><p class="small">Antagandena sparas i den här webbläsaren. Exportera JSON för att dela dem.</p></article>';
+}
+
+/* ---------- 05 Exploatering ---------- */
+function explView() {
+  const ar = R.areas, A = D.expl.omraden, byYear = M.cityByYear(R).filter(r => r.year >= 2030 && r.year <= 2050);
+  const comps = ['bygg', 'mark', 'nydrift', 'nymob'];
+  const bta = ar.reduce((s, a) => s + a.btaSum, 0), aker = A.reduce((s, a) => s + a.delar.reduce((x, d) => x + d.mark.aker, 0), 0);
+  const sum = c => byYear.reduce((s, r) => s + r[c], 0);
+  let h = '<section class="kpis four"><article class="card kpi-main"><div class="kpi-label">Exploatering 2030–2050 · summa</div><div class="kpi-value">' + kt(comps.reduce((s, c) => s + sum(c), 0)) + ' <span class="unit">kt CO₂e</span></div><div class="kpi-foot">Nybyggnation ' + kt(sum('bygg')) + ' kt · mark ' + kt(sum('mark')) + ' kt · drift ' + kt(sum('nydrift')) + ' kt · mobilitet ' + kt(sum('nymob')) + ' kt</div></article>' +
+    '<article class="card"><div class="kpi-label">Tillkommande BTA</div><div class="kpi-value">' + nf(bta / 1e6, 2) + ' <span class="unit">milj. m²</span></div><div class="kpi-foot">' + nf(A.reduce((s, a) => s + a.bostader, 0)) + ' bostäder · ' + nf(A.reduce((s, a) => s + a.arbetsplatser, 0)) + ' arbetsplatser</div></article>' +
+    '<article class="card"><div class="kpi-label">Åkermark som tas i anspråk</div><div class="kpi-value">' + nf(aker * P.hardgorandel, 0) + ' <span class="unit">ha hårdgörs</span></div><div class="kpi-foot">' + nf(aker, 0) + ' ha åkermark inom områdena enligt OSM</div></article>' +
+    '<article class="card"><div class="kpi-label">Per ny bostad</div><div class="kpi-value">' + nf(sum('bygg') / Math.max(1, A.reduce((s, a) => s + a.bostader, 0)), 1) + ' <span class="unit">t CO₂e</span></div><div class="kpi-foot">Nybyggnation inkl. lokaler och skolor, fördelat per bostad</div></article></section>';
+  h += '<article class="card"><h2>Exploateringens klimatpåverkan per år</h2><p class="card-sub">Hela Malmö, kt CO₂e per år, enligt valda antaganden. Mobilitet enligt ' + esc(mobLabel()) + '.</p>' + stackChart('chart-expl', byYear.map(r => ({...r, key: r.year, tipTitle: 'Exploatering ' + r.year})), comps, {sel: P.ar, aria: 'Exploateringens klimatpåverkan per år', h: 300, onClick: r => { if (M.YEARS.includes(r.year)) setP({ar: r.year}); }}) + '</article>';
+  const rows = ar.map((x, k) => ({...x, a: A[k], aker: A[k].delar.reduce((s, d) => s + d.mark.aker, 0)}));
+  const [sk, sd] = st.explSort; rows.sort((a, b) => sk === 'namn' ? sd * a.namn.localeCompare(b.namn) : sd * ((a[sk] ?? 0) - (b[sk] ?? 0)));
+  const cols = [['namn', 'Område'], ['fokus', 'Fokus · byggår'], ['bost', 'Bostäder'], ['arb', 'Arbetsplatser'], ['btaSum', 'BTA m²'], ['ha', 'Yta ha'], ['aker', 'varav åker ha'], ['bygg', 'Nybyggnation t'], ['mark', 'Mark t'], ['nydrift2050', 'Drift 2050 t/år'], ['nymob2050', 'Mobilitet 2050 t/år (B)']];
+  rows.forEach(r => { r.bost = r.a.bostader; r.arb = r.a.arbetsplatser; r.ha = r.a.ha; r.fokus = r.a.fokus; });
+  h += '<article class="card"><h2>Utbyggnadsområden i ÖP 2023</h2><p class="card-sub">Områden med minst 200 bostäder eller 500 arbetsplatser där detaljplaneringen inte har börjat. Nybyggnation och mark avser summan 2030–2050. Mobilitet 2050 visas med hushållslogik (B) för området.</p><div class="table-wrap area-table"><table class="tbl-sort" id="expl-table"><thead><tr>' + cols.map(([c, l]) => '<th data-sort="' + c + '" class="' + (c !== 'namn' && c !== 'fokus' ? 'numeric ' : '') + (sk === c ? 'sorted' + (sd > 0 ? ' asc' : '') : '') + '">' + l + '</th>').join('') + '</tr></thead><tbody>' +
+    rows.map(r => '<tr><td><button class="link-btn" data-area="' + r.id + '">' + esc(r.namn) + '</button><small>' + esc(r.a.kategori) + (r.a.storstadspaket ? ' · Storstadspaketet linje ' + esc(r.a.storstadspaket) : '') + '</small></td><td><span class="chip f' + r.a.fokus + '">Fokus ' + r.a.fokus + '</span><small>' + r.s + '–' + (r.e - 1) + '</small></td><td class="numeric">' + nf(r.bost) + '</td><td class="numeric">' + nf(r.arb) + '</td><td class="numeric">' + nf(r.btaSum) + '</td><td class="numeric">' + nf(r.ha, 1) + '</td><td class="numeric">' + nf(r.aker, 1) + '</td><td class="numeric">' + nf(r.bygg) + '</td><td class="numeric">' + nf(r.mark) + '</td><td class="numeric">' + nf(r.nydrift2050) + '</td><td class="numeric">' + nf(r.nymob2050) + '</td></tr>').join('') + '</tbody></table></div>' +
+    '<p class="small">Källa: Malmö stad, Översiktsplan för Malmö 2023, underlag "Utbyggnadsområden". Marktäcke: OpenStreetMap. BTA = bostäder × ' + P.btaBostad + ' m² + arbetsplatser × ' + P.btaArbBlandad + '/' + P.btaArbVerks + ' m² + skolplatser × ' + P.btaSkolplats + ' m².</p></article>';
+  return h;
+}
+
+/* ---------- 06 Data & kvalitet ---------- */
+function dataView() {
+  const q = D.energi.urval, m = D.meta, E = D.energi.kolumner;
+  const btaStats = {}; const elStats = {};
+  E.btak.forEach((k, i) => { if (!E.alloc[i].length) return; const n = D.energi.koder.btak[k]; btaStats[n] = btaStats[n] || {n: 0, bta: 0}; btaStats[n].n++; btaStats[n].bta += E.bta[i]; });
+  E.elk.forEach((k, i) => { if (!E.alloc[i].length) return; const n = D.energi.koder.elk[k]; elStats[n] = (elStats[n] || 0) + 1; });
+  const btaTot = Object.values(btaStats).reduce((s, x) => s + x.bta, 0);
+  const btaNames = {osm_levels: 'OSM building:levels (uppmätt/kartlagt)', osm_height: 'OSM-höjd / 3 m', median_deso: 'Median för taggade byggnader i samma DeSO', median_regso: 'Median i samma RegSO', median_malmo: 'Median i hela Malmö (' + q.vaningar_imputering.median_malmo + ' plan)', smahus_standard: 'Småhustyp, 1,5 plan', liten_byggnad: 'Liten byggnad, 1 plan', stor_byggnadsyta: 'Fotavtryck ≥ 3 000 m², 2 plan (hall)', saknas: 'Ingen byggnad hittad – medianyta används'};
+  const elNames = {kvot_ep_se: 'Kvot primärenergital / energiprestanda', median_deso: 'Median i samma DeSO (primärenergital saknas)', median_malmo: 'Median i Malmö'};
+  const flags = m.adresskoppling.flaggor;
+  const flagNames = {A: 'Exakt träff', B: 'Träff efter normalisering av stavning/mellanslag', P: 'Samma gatuadress, avvikande postnummer', C: 'Stavningskorrigerad gata, samma husnummer', R: 'Avvisad (annat husnummer eller osäker)', U: 'Ingen träff'};
+  let h = '<section class="grid2 grid-even"><article class="card"><h2>Energideklarationer: urval</h2><p class="card-sub">Användarens CSV, ' + nf(q.rader) + ' adressrader. SHA-256 ' + esc(q.csv_sha256.slice(0, 16)) + '…</p><table class="quality-table"><tbody>' +
+    '<tr><td>Adressrader i filen</td><td class="numeric">' + nf(q.rader) + '</td></tr><tr><td>Exakta dubblettrader borttagna</td><td class="numeric">' + nf(q.exakta_dubblettrader) + '</td></tr><tr><td>Unika deklarations-ID</td><td class="numeric">' + nf(q.deklarationer) + '</td></tr><tr><td>Ersatta av senare deklaration för samma adress</td><td class="numeric">' + nf(q.ersatta_av_senare_deklaration) + '</td></tr><tr><td>Beräkningsbara deklarationer</td><td class="numeric">' + nf(q.beraknade_deklarationer) + '</td></tr><tr><td>Kartlagda till DeSO</td><td class="numeric">' + nf(q.kartlagda) + '</td></tr><tr><td>Ej kartlagda (ingen godkänd adress)</td><td class="numeric">' + nf(q.ej_kartlagda) + '</td></tr></tbody></table>' +
+    '<p class="small">Regel: en adress styrs av den senaste deklarationen. Deklarationer med samma senaste datum behålls alla (troligen olika byggnader). Adresserna i en deklaration väger lika; okopplade adresser får ingen vikt.</p></article>' +
+    '<article class="card"><h2>Adresskoppling</h2><p class="card-sub">Malmö stads adresstjänst (Malmo_adresser_platser, GeocodeServer), hämtad ' + esc(m.adresskoppling.hamtad) + '. Punkt-i-polygon mot SCB DeSO 2025.</p><table class="quality-table"><tbody>' +
+    Object.entries(flagNames).map(([k, l]) => '<tr><td>' + k + ' · ' + l + (('ABPC').includes(k) ? '' : ' <span class="status st-avvik">används ej</span>') + '</td><td class="numeric">' + nf(flags[k] || 0) + '</td></tr>').join('') + '<tr><td><b>Godkända och kopplade till DeSO</b></td><td class="numeric"><b>' + nf(m.adresskoppling.godkanda) + '</b></td></tr></tbody></table><p class="small">Hela tabellen finns i GitHub som <code>data/adresskoppling.csv</code> och kan laddas ned på sidan "Underlag" i Streamlit.</p></article></section>';
+  h += '<section class="grid2 grid-even"><article class="card"><h2>Skattad Atemp</h2><p class="card-sub">Atemp = Σ OSM-fotavtryck × våningar × andel × ' + nf(P.atempFaktor, 2) + '. Andel = deklarationens adresser i byggnaden / alla deklarationsadresser i byggnaden.</p><table class="quality-table"><thead><tr><th>Våningskälla (störst del av BTA)</th><th class="numeric">Deklarationer</th><th class="numeric">Andel av BTA</th></tr></thead><tbody>' +
+    Object.entries(btaStats).sort((a, b) => b[1].bta - a[1].bta).map(([k, x]) => '<tr><td>' + esc(btaNames[k] || k) + '</td><td class="numeric">' + nf(x.n) + '</td><td class="numeric">' + nf(100 * x.bta / btaTot, 1) + ' %</td></tr>').join('') + '</tbody></table>' +
+    '<p class="small">Summa skattad Atemp: <b>' + nf(btaTot * P.atempFaktor / 1e6, 1) + ' milj. m²</b>. Skattningen är det största osäkerhetsmomentet för energidelen. Bättre underlag: Boverkets öppna data om energideklarationer (Atemp per deklaration) kan läsas in i en kommande version.</p></article>' +
+    '<article class="card"><h2>Energibärare</h2><p class="card-sub">Kvoten r = primärenergital / energiprestanda ökar med andelen el. Ankarvärden per regelregim (BBR före/efter 1 sep 2020).</p><table class="quality-table"><tbody>' +
+    Object.entries(elStats).map(([k, n]) => '<tr><td>' + esc(elNames[k] || k) + '</td><td class="numeric">' + nf(n) + '</td></tr>').join('') + '</tbody></table>' +
+    '<table class="quality-table"><thead><tr><th>Regim</th><th class="numeric">r, 10:e percentil</th><th class="numeric">r, 90:e percentil</th><th class="numeric">n</th></tr></thead><tbody>' +
+    Object.entries(q.energibarare_ankare).map(([k, a]) => '<tr><td>' + (k === 'bbr29' ? 'Från 1 sep 2020 (el 1,8 / fjärrvärme 0,7)' : 'Före 1 sep 2020 (el 1,6 / fjärrvärme 1,0)') + '</td><td class="numeric">' + nf(a.r_lo, 3) + '</td><td class="numeric">' + nf(a.r_hi, 3) + '</td><td class="numeric">' + nf(a.n) + '</td></tr>').join('') + '</tbody></table>' +
+    '<p class="small">Elandel = ' + nf(q.f0_fastighetsel, 2) + ' + (1 − ' + nf(q.f0_fastighetsel, 2) + ') × (r − r₁₀)/(r₉₀ − r₁₀), begränsad till 0–1. ' + nf(q.f0_fastighetsel, 2) + ' motsvarar fastighetsel i en fjärrvärmevärmd byggnad (antagande). Median i Malmö: ' + nf(100 * q.elandel_median_malmo) + ' %.</p></article></section>';
+  h += '<article class="card"><h2>Ladda ned</h2><div class="button-row"><button class="secondary" id="dl-deso">DeSO-resultat · CSV</button><button class="secondary" id="dl-decl">Deklarationer med beräkning · CSV</button><button class="secondary" id="dl-years">Malmö per år · CSV</button><button class="secondary" id="dl-json">Antaganden och resultat · JSON</button></div><p class="small">Allt räknas i webbläsaren med de antaganden som är valda just nu.</p></article>';
+  return h;
+}
+
+/* ---------- 07 Metod ---------- */
+function methodView() {
+  const m = D.meta;
+  return '<article class="card method-text"><h2>Syfte och systemgräns</h2><p>MalmoOP är en screeningmodell för översiktsplanering. Den räknar ett årligt klimatavtryck per DeSO (SCB 2025, 209 områden) för tre delar: energi i befintliga byggnader, mobilitet och utbyggnaden enligt Översiktsplan för Malmö 2023. Resultatet visas i ton CO₂e per år, per hektar landyta (havsytor exkluderade via OpenStreetMap-landpolygoner) och per invånare. Beräkningsåret för utgångsläget är 2024. Framtidsåren 2030–2050 är scenarier, inte prognoser.</p>' +
+    '<h2>1. Energi i befintliga byggnader</h2><div class="formula">t CO₂e = Σ<sub>deklarationer</sub> EP<sub>spec</sub> × Atemp × (s × EF<sub>el</sub> + (1 − s) × EF<sub>fv</sub>) / 1 000 × w<sub>DeSO</sub></div>' +
+    '<ul><li><b>Energiprestanda</b> (kWh/m² Atemp och år) är deklarationens specifika energianvändning. Primärenergitalet används aldrig som köpt energi; det används bara i kvoten för energibärare.</li><li><b>Atemp</b> saknas i CSV-filen. Den skattas som OSM-byggnadens fotavtryck × antal våningar × Atemp/BTA (0,9). Våningar: <code>building:levels</code>; annars höjd/3 m; annars median för taggade flerbostads- och lokalbyggnader i samma DeSO, RegSO eller hela Malmö. Småhustyper 1,5 plan. Fotavtryck ≥ 3 000 m² utan våningsuppgift 2 plan. Om flera deklarationer delar byggnad delas ytan efter antal adresser.</li><li><b>Elandel s</b> skattas ur r = primärenergital/energiprestanda. El har högre primärenergifaktor än fjärrvärme (1,8 mot 0,7 efter 1 sep 2020; 1,6 mot 1,0 före). Regimskiftet syns tydligt i data. Saknas primärenergital används medianen i DeSO eller Malmö.</li><li><b>Emissionsfaktorer:</b> el 0,037 och fjärrvärme 0,056 kg CO₂e/kWh enligt Boverkets klimatdatabas, återgivna i Boverkets räkneexempel för modul A5. Användningen för årlig driftenergi är ett modellval. Faktorerna är nationella medelvärden och inte Malmöspecifika eller marginella.</li><li><b>Urval:</b> exakta dubbletter tas bort; en adress styrs av den senaste deklarationen; adresser väger lika; okopplade adresser får ingen vikt. ' + nf(D.energi.urval.ej_kartlagda) + ' deklarationer kunde inte kartläggas och ingår inte i DeSO-summorna.</li><li><b>Täckning:</b> byggnader utan energideklaration ingår inte. Detta gäller främst småhus som inte sålts och byggnader under 250 m² utan krav. Summan är därför inte Malmös totala byggnadsutsläpp.</li></ul>' +
+    '<h2>2. Mobilitet (Vägvis 2.3.1)</h2><p>Utgångsläget 2024 per DeSO hämtas från Vägvis 2.3.1: <b>A</b> = territoriell trafik på vägar i området (vägar × trafikmängd, livscykel, kalibrerad mot Malmös direkta vägtrafikutsläpp 2024), <b>B</b> = hushållens registrerade bilar × körsträcka × livscykelfaktor. B räknas om här med Vägvis egen beräkningsmotor (3 000 iterationer, seed 19062026). A och B är olika perspektiv och adderas aldrig. Framåt skalas utgångsläget med flottans klimatfaktor och förändrat trafikarbete. Nya hushåll får bilinnehav och körsträcka som värd-DeSO 2024. I A läggs deras trafik på Malmös vägnät i proportion till dagens trafik.</p>' +
+    '<h2>3. Exploatering 2030–2050 (ÖP 2023)</h2><ul><li><b>Volymer:</b> bostäder, arbetsplatser och skolplatser per utbyggnadsområde från Malmö stads ÖP-underlag. BTA = bostäder × 90 m² + arbetsplatser × 25 m² (blandad stad) eller 100 m² (verksamhetsområde) + skolplatser × 10 m². Alla värden kan ändras.</li><li><b>Tid:</b> Fokus 1 byggs 2030–2039 och Fokus 2 2040–2049, jämnt fördelat. Enligt Malmö stad detaljplaneras Fokus 1 före 2030 och Fokus 2 därefter.</li><li><b>Nybyggnation (A1–A5):</b> BTA × klimatfaktor. Standard är Boverkets föreslagna gränsvärden för 2030: flerbostadshus 235, kontor/skolor 250, hallbyggnader 190 kg CO₂e/m² BTA. Alternativ: dagens referensvärden (358/383/291) eller en indikativ bana till −90 % år 2040 mot en 75-percentil som här approximeras som referensvärdet × 1,15.</li><li><b>Förändrad markanvändning:</b> utbyggnadsytan delas per DeSO och klassas med OpenStreetMap (åker, öppen mark, skog, vatten, bebyggd, okänd). Förlust = ha × hårdgörandel (0,7) × (kolförråd före − 22 t C/ha) × 44/12. Kolförråden är hämtade från Länsstyrelsen i Uppsala län (2025) och används som proxy. Utsläppet fördelas över byggåren.</li><li><b>Nya byggnaders energi:</b> BTA × 0,9 × 50 kWh/m² och år × emissionsfaktor (22 % el), från det år byggnaderna är klara.</li><li><b>Fördelning:</b> ett område som ligger i flera DeSO fördelas efter yta.</li></ul>' +
+    '<h2>Osäkerhet och tolkning</h2><p>Mobilitetens 95-procentsintervall kommer från Vägvis. För energi och exploatering redovisas inga statistiska intervall. De största osäkerheterna är skattad Atemp, klimatfaktorer för framtida byggande, kolförråd och tidsplan. Använd Antaganden & scenario för känslighetsanalys. Resultaten är jämförbara mellan DeSO under samma antaganden, men de är inte en officiell utsläppsstatistik.</p>' +
+    '<h2>Referenser</h2><ol class="refs">' + m.referenser.map(r => '<li>' + r + '</li>').join('') + '</ol>' +
+    '<h2>Licenser</h2><p class="small">Appkod: MIT. Gränssnittets stil och mobilitetsmotorn kommer från Vägvis 2.3.1 (MIT). Leaflet 1.9.4: BSD-2-Clause. OpenStreetMap-data: © OpenStreetMap contributors, ODbL 1.0. SCB:s geodata och Malmö stads öppna kartunderlag används enligt respektive villkor.</p></article>';
+}
+
+/* ---------- export ---------- */
+function download(name, text, mime) { const b = new Blob([text], {type: mime}), a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = name; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500); }
+const csvCell = x => typeof x === 'number' ? String(Math.round(x * 1000) / 1000).replace('.', ',') : '"' + String(x ?? '').replace(/"/g, '""') + '"';
+function csvDeso() {
+  const v = cur(), head = ['deso', 'omrade', 'ar', 'perspektiv_mobilitet', ...M.COMPONENTS, 'total', 'land_ha', 'invanare', 't_per_ha', 'kg_per_ha', 't_per_invanare'];
+  return '﻿' + head.join(';') + '\n' + v.rows.map(r => [r.id, areaName(r.id), yearLabel(P.ar), P.perspektiv, ...M.COMPONENTS.map(c => r[c]), r.total, r.land_ha, r.bef, M.metric(r, 'total', 't_ha'), M.metric(r, 'total', 'kg_ha'), M.metric(r, 'total', 't_inv')].map(csvCell).join(';')).join('\n');
+}
+function csvYears() { return '﻿' + ['ar', ...M.COMPONENTS, 'total', 'invanare'].join(';') + '\n' + M.cityByYear(R).map(r => [r.year, ...M.COMPONENTS.map(c => r[c]), r.total, r.bef].map(csvCell).join(';')).join('\n'); }
+function csvDecl() {
+  const E = D.energi.kolumner, ids = D.energi.deso;
+  let out = '﻿' + ['id', 'fastighet', 'klass', 'energiprestanda_kwh_m2', 'primarenergital', 'ar', 'bta_m2', 'atemp_m2', 'atemp_kalla', 'elandel', 'elandel_kalla', 'deso_fordelning', 't_co2e_2024'].join(';') + '\n';
+  for (let i = 0; i < E.id.length; i++) {
+    const a = P.atempLage === 'fast' ? P.atempFast : (E.bta[i] > 0 ? E.bta[i] * P.atempFaktor : S.btaMedian * P.atempFaktor), s = P.elLage === 'fast' ? P.elFast : E.el[i];
+    out += [E.id[i], E.fast[i], E.klass[i], E.se[i], E.ep[i] ?? '', E.ar[i], E.bta[i], a, D.energi.koder.btak[E.btak[i]], s, D.energi.koder.elk[E.elk[i]], E.alloc[i].map(([d, w]) => ids[d] + ':' + (Math.round(w * 1000) / 1000)).join(' '), E.se[i] * a * (s * P.efEl + (1 - s) * P.efFv) / 1000].map(csvCell).join(';') + '\n';
+  }
+  return out;
+}
+function jsonAll() { return JSON.stringify({app: 'MalmoOP', version: M.VERSION, created: new Date().toISOString(), antaganden: P, malmo_per_ar: M.cityByYear(R), deso_valt_ar: cur().rows, utbyggnadsomraden: R.areas, kallor: D.meta.referenser}, null, 1); }
+function bindExports() {
+  const map_ = {'download-csv': () => download('malmoop_deso_' + yearLabel(P.ar) + '_' + P.perspektiv + '.csv', csvDeso(), 'text/csv'), 'download-years': () => download('malmoop_malmo_per_ar_' + P.perspektiv + '.csv', csvYears(), 'text/csv'), 'download-decl': () => download('malmoop_energideklarationer.csv', csvDecl(), 'text/csv'), 'download-json': () => download('malmoop_resultat.json', jsonAll(), 'application/json'),
+    'dl-deso': () => download('malmoop_deso_' + yearLabel(P.ar) + '_' + P.perspektiv + '.csv', csvDeso(), 'text/csv'), 'dl-decl': () => download('malmoop_energideklarationer.csv', csvDecl(), 'text/csv'), 'dl-years': () => download('malmoop_malmo_per_ar_' + P.perspektiv + '.csv', csvYears(), 'text/csv'), 'dl-json': () => download('malmoop_resultat.json', jsonAll(), 'application/json')};
+  for (const [id, fn] of Object.entries(map_)) { const el = $(id); if (el) el.onclick = fn; }
+}
+
+/* ---------- rendering ---------- */
+function render() {
+  const view = $('view');
+  if (map && st.view !== 'map') { map.remove(); map = null; }
+  charts.length = 0;
+  const html = {overview, map: mapView, calc: calcView, parameters: paramsView, expl: explView, data: dataView, method: methodView}[st.view]();
+  view.innerHTML = html;
+  drawCharts();
+  if (st.view === 'expl') {
+    document.querySelectorAll('#expl-table th[data-sort]').forEach(th => th.onclick = () => { const c = th.dataset.sort; st.explSort = [c, st.explSort[0] === c ? -st.explSort[1] : (c === 'namn' ? 1 : -1)]; render(); });
+    document.querySelectorAll('[data-area]').forEach(b => b.onclick = () => { const a = D.expl.omraden.find(x => String(x.id) === b.dataset.area); const big = a.delar.slice().sort((x, y) => y.ha - x.ha)[0]; st.selected = big.deso; st.dev = true; go('map'); setTimeout(() => { if (map) map.fitBounds(window.L.geoJSON(a.geometry).getBounds(), {padding: [60, 60], maxZoom: 15}); }, 120); }); }
+  if (st.view === 'map') { drawMap(); detail(); table();
+    $('metric').onchange = e => { st.metric = e.target.value; render(); };
+    $('unit').onchange = e => { st.unit = e.target.value; render(); };
+    $('table-filter').oninput = e => { st.filter = e.target.value; table(); }; }
+  if (st.view === 'calc') $('calc-pick').onchange = e => { st.selected = e.target.value; render(); };
+  if (st.view === 'parameters') {
+    view.querySelectorAll('[data-p]').forEach(el => el.onchange = () => { const k = el.dataset.p; let v = el.value; if (k === 'exploatering') v = v === 'true'; setP({[k]: v}); });
+    $('reset-params').onclick = () => { P = M.params({ar: P.ar, perspektiv: P.perspektiv}); R = M.compute(S, P); store.set(P); renderChrome(); render(); };
+  }
+  bindExports();
+}
+function go(v) { st.view = v; renderChrome(); render(); window.scrollTo({top: 0}); }
+
+document.addEventListener('click', e => {
+  const nav = e.target.closest('[data-view]'); if (nav) { e.preventDefault(); go(nav.dataset.view); return; }
+  const g = e.target.closest('[data-go]'); if (g) { e.preventDefault(); go(g.dataset.go); return; }
+  const y = e.target.closest('[data-year]'); if (y) { setP({ar: y.dataset.year === 'ack' ? 'ack' : Number(y.dataset.year)}); return; }
+  const m = e.target.closest('.model-switch button'); if (m) { setP({perspektiv: m.dataset.model}); return; }
+  const lb = e.target.closest('.link-btn[data-id]'); if (lb) { e.stopPropagation(); selectArea(lb.dataset.id, true); }
+});
+$('primary-action').onclick = () => go(st.view === 'map' ? 'calc' : 'map');
+$('export').onclick = () => $('export-dialog').showModal();
+$('close-export').onclick = () => $('export-dialog').close();
+$('print').onclick = () => { $('export-dialog').close(); window.print(); };
+$('reset-side').onclick = () => { P = M.params({ar: P.ar, perspektiv: P.perspektiv}); R = M.compute(S, P); store.set(P); renderChrome(); render(); };
+renderChrome(); render();
+window.MalmoOPApp = {get params() { return P; }, get result() { return R; }, S, D, go, setP};
+})();

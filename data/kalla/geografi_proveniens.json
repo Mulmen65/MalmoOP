@@ -1,0 +1,57 @@
+{
+ "geography": "SCB DeSO 2025_v2; giltig 2025-01-01. Medföljande geometri.",
+ "geography_url": "https://www.scb.se/vara-tjanster/oppna-data/oppna-geodata/demografiska-statistikomraden-deso/",
+ "geography_original": "DESO_2025_Malmo.zip",
+ "coast": {
+  "schemaVersion": 3,
+  "accessed": "2026-10-26",
+  "use": "display_and_area_without_sea",
+  "source": "https://osmdata.openstreetmap.de/download/land-polygons-split-4326.zip",
+  "file": "land-polygons-split-4326.zip",
+  "sha256": "84e76612d9fd7f15e0ee52ea956fbf7529a67576a175d1d5aa4021c9ddc20e24",
+  "licence": "ODbL, © OpenStreetMap-bidragsgivare",
+  "cities": {
+   "1280": {
+    "status": "osm_land_polygons",
+    "landHa": 15858.23,
+    "totalHa": 33444.78,
+    "displaySimplificationDegrees": 2e-05,
+    "maskVertices": 2401,
+    "roadCheck": {
+     "roadVertices": 40773,
+     "outsideVertices": 4,
+     "outsidePercent": 0.01,
+     "toleranceMetres": 15
+    }
+   },
+   "1283": {
+    "status": "osm_land_polygons",
+    "landHa": 34529.62,
+    "totalHa": 42306.34,
+    "displaySimplificationDegrees": 2e-05,
+    "maskVertices": 2017,
+    "roadCheck": {
+     "roadVertices": 35712,
+     "outsideVertices": 6,
+     "outsidePercent": 0.017,
+     "toleranceMetres": 15
+    }
+   },
+   "2180": {
+    "status": "osm_land_polygons",
+    "landHa": 178249.22,
+    "totalHa": 319806.01,
+    "displaySimplificationDegrees": 2e-05,
+    "maskVertices": 30600,
+    "roadCheck": {
+     "roadVertices": 51950,
+     "outsideVertices": 0,
+     "outsidePercent": 0,
+     "toleranceMetres": 15
+    }
+   }
+  },
+  "note": "Utsläppen beräknas alltid med SCB:s fullständiga DeSO-geometri. Masken påverkar bara kartvisningen och nyckeltalet per hektar utan hav."
+ },
+ "source_csv": "Användarens bifogade CSV, deklarationsdatum 2013–2023. Fullständighet och uttagsdatum ej angivna."
+}

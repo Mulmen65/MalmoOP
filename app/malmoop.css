@@ -1,0 +1,73 @@
+/* MalmoOP-tillägg ovanpå Vägvis grundstil. Samma palett, typografi och avstånd. */
+:root{--c-energi:#1baf7a;--c-mobilitet:#2a78d6;--c-bygg:#eb6834;--c-mark:#6250d6;--c-nydrift:#eda100;--c-nymob:#e87ba4}
+.brandmark{font-size:26px}
+.year-switch{display:flex;gap:3px;background:#eef2eb;padding:4px;border-radius:9px;flex-wrap:wrap}
+.year-switch button{padding:7px 11px;font-size:11.5px;background:none;color:#4f6560;font-variant-numeric:tabular-nums}
+.year-switch button.active{background:#fff;box-shadow:0 1px 5px #0000000f;color:var(--teal)}
+.year-switch button:hover:not(.active){color:var(--ink)}
+.kpis.four{grid-template-columns:1.6fr 1fr 1fr 1fr}
+.kpi-value .unit{font-size:12px;letter-spacing:0;font-weight:400}
+.delta-up{color:#9c352e}.delta-down{color:#1d6a45}
+.kpi-main .delta-up,.kpi-main .delta-down{color:#e9d6a6}
+.parts .component-row{grid-template-columns:170px 1fr 92px}
+.parts .fill{border-radius:0 4px 4px 0}
+.parts .component-row i.sw{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:7px;vertical-align:-1px}
+.parts .component-row .lbl{font-size:11.5px;color:var(--text)}
+.parts .component-row .lbl small{display:block;color:var(--muted);font-size:10px}
+.parts .component-total{font-size:12.5px}
+.chart-wrap{position:relative}
+.chart-wrap svg{display:block;width:100%;height:auto;overflow:visible}
+.chart-wrap .gridline{stroke:#e6ece6;stroke-width:1}
+.chart-wrap .axis-label{fill:var(--muted);font-size:10px;font-variant-numeric:tabular-nums}
+.chart-wrap .x-label{fill:var(--text);font-size:10.5px;font-variant-numeric:tabular-nums}
+.chart-wrap .x-label.sel{fill:var(--ink);font-weight:700}
+.chart-wrap .bar-hit{fill:transparent;cursor:pointer}
+.chart-wrap .bar-hit:hover+g rect,.chart-wrap g.bar.hover rect{opacity:.85}
+.chart-wrap g.bar.sel .sel-mark{fill:var(--ink)}
+.chart-tip{position:absolute;pointer-events:none;background:#fff;border:1px solid var(--line);border-radius:9px;box-shadow:0 4px 18px #0b2e2826;padding:9px 11px;font-size:11.5px;min-width:210px;z-index:10;display:none}
+.chart-tip b{display:block;color:var(--ink);font-size:12px;margin-bottom:5px}
+.chart-tip div{display:flex;justify-content:space-between;gap:12px;margin:2px 0;font-variant-numeric:tabular-nums}
+.chart-tip div span:first-child{display:flex;align-items:center;gap:6px}
+.chart-tip i{width:9px;height:9px;border-radius:2px;display:inline-block}
+.chart-tip .tip-total{border-top:1px solid var(--line);margin-top:5px;padding-top:5px;font-weight:700;color:var(--ink)}
+.chart-legend{display:flex;flex-wrap:wrap;gap:6px 16px;margin-top:10px;font-size:11px;color:var(--text)}
+.chart-legend span{display:flex;align-items:center;gap:6px}
+.chart-legend i{width:10px;height:10px;border-radius:3px;display:inline-block}
+.chart-legend b{font-variant-numeric:tabular-nums;color:var(--ink);font-weight:600}
+.map-toolbar2{display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center;margin-bottom:14px}
+.map-toolbar2 label.inline{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--ink)}
+.map-toolbar2 select{min-width:220px}
+.map-checks{display:flex;gap:16px;align-items:center;flex-wrap:wrap;margin-bottom:10px}
+.map-checks label{font-size:12px;display:flex;align-items:center;gap:6px}
+.map-checks input{accent-color:var(--teal)}
+.map-checks .map-fit{margin-left:auto}
+.map-legend i.dev1{border:2px solid #a76019;background:transparent;height:10px}
+.map-legend i.dev2{border:2px dashed #a76019;background:transparent;height:10px}
+.leaflet-tooltip.dev-tip{border-color:#e6cfa8}
+#map-status{margin-top:8px}
+.field-group h2{margin-bottom:4px}
+.field-group .card-sub{margin-bottom:16px}
+.controls .field input[type=number]{max-width:100%}
+.field .src{display:block;font-size:10px;color:var(--muted);margin-top:5px;line-height:1.45}
+.changed-dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:#daa84d;margin-left:6px;vertical-align:1px}
+.tbl-sort th{cursor:pointer;user-select:none}
+.tbl-sort th.sorted:after{content:' ↓';color:var(--teal)}
+.tbl-sort th.sorted.asc:after{content:' ↑'}
+.area-table td.numeric small{display:block}
+.chip{display:inline-block;border-radius:5px;padding:1px 7px;font-size:10px;font-weight:650;white-space:nowrap}
+.chip.f1{background:#fcf1db;color:#7b4a13}.chip.f2{background:#eef2eb;color:#4f6560;border:1px dashed #b9c3be}
+.chip.vo{background:#e4e8f3;color:#3d4f7c}.chip.bs{background:#dcefe4;color:#1d6a45}
+.kv{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:6px 0}
+.kv>div{border-top:1px solid var(--line);padding-top:9px}
+.kv b{display:block;font-size:22px;font-weight:650;color:var(--ink);font-variant-numeric:tabular-nums;line-height:1.25}
+.kv span{font-size:10.5px;color:var(--muted)}
+.method-text ul{padding-left:18px}
+.method-text code,.formula code{font-family:Consolas,Menlo,monospace;font-size:11.5px;background:#f0f4ee;padding:1px 5px;border-radius:4px}
+.refs li{margin:9px 0;font-size:12px;line-height:1.6}
+.refs a{word-break:break-word}
+.ad-intervall{font-size:10.5px;color:var(--muted);display:block;margin-top:2px}
+.quality-table td{white-space:normal}
+.notice ul{margin:6px 0 0;padding-left:18px}
+@media(max-width:1150px){.kpis.four{grid-template-columns:1fr 1fr}.kv{grid-template-columns:repeat(2,1fr)}.parts .component-row{grid-template-columns:130px 1fr 80px}}
+@media(max-width:720px){.kpis.four{grid-template-columns:1fr}.year-switch button{padding:6px 8px;font-size:10.5px}.map-toolbar2 select{min-width:0;width:100%}.map-toolbar2 label.inline{flex-wrap:wrap;width:100%}}
+@media print{.year-switch,.map-checks,.map-toolbar2{display:none!important}}

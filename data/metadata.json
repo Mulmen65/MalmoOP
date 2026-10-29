@@ -1,0 +1,33 @@
+{
+ "app": "MalmoOP",
+ "version": "1.0.0",
+ "byggdatum": "2026-10-29",
+ "adresskoppling": {
+  "totalt": 31356,
+  "godkanda": 31028,
+  "flaggor": {
+   "A": 30946,
+   "R": 143,
+   "C": 6,
+   "B": 6,
+   "U": 185,
+   "P": 70
+  },
+  "hamtad": "29 oktober 2026",
+  "tjanst": "https://gis.malmo.se/arcgis/rest/services/Malmo_adresser_platser/GeocodeServer"
+ },
+ "referenser": [
+  "Boverket (2026a) <i>Indata om energianvändning i klimatdeklarationen</i>. Senast granskad 29 maj 2026. Tillgänglig på: <a href=\"https://www.boverket.se/sv/klimatdeklaration/gor-sa-har/underlag/indata-om-energi/\" target=\"_blank\" rel=\"noopener\">boverket.se/sv/klimatdeklaration/gor-sa-har/underlag/indata-om-energi/</a> (Hämtad: 29 oktober 2026). Emissionsfaktorer för svensk elmix (0,037) och fjärrvärme, svenskt medelvärde (0,056 kg CO₂e/kWh) ur Boverkets klimatdatabas, angivna i räkneexemplet för modul A5.",
+  "Boverket (2026b) <i>Utkast färdplan för införande av gränsvärden för byggnaders klimatpåverkan</i>. Rapport 2026:29. Karlskrona: Boverket. Tillgänglig på: <a href=\"https://www.boverket.se/globalassets/publikationer/dokument/2026/rapport-2026-29_utkast-fardplan-gransvarden-klimatpaverkan-byggnader.pdf\" target=\"_blank\" rel=\"noopener\">boverket.se (PDF)</a> (Hämtad: 29 oktober 2026). Tabell 2 (referensvärden) och tabell 5 (förslag till gränsvärden 2030); avsnitt 8.5 (indikativ bana).",
+  "Boverket (u.å.) <i>Vad är primärenergital?</i> PBL kunskapsbanken. Tillgänglig på: <a href=\"https://www.boverket.se/sv/PBL-kunskapsbanken/regler-om-byggande/boverkets-byggregler/energihushallning/vad-ar-primarenergital/\" target=\"_blank\" rel=\"noopener\">boverket.se</a> (Hämtad: 29 oktober 2026). Primärenergital infördes 1 juli 2017 (BFS 2017:5, BBR 25); nya viktningsfaktorer 1 september 2020 (BFS 2020:4, BBR 29).",
+  "Länsstyrelsen i Uppsala län (2025) <i>Kolförråd och kolsänka i skog och mark inom Uppsala län – slutrapport</i>. Tillgänglig på: <a href=\"https://www.lansstyrelsen.se/download/18.5d22726519618d6580ad106f/1745831516378/Kolf%C3%B6rr%C3%A5d%20och%20kols%C3%A4nka%20i%20skog%20och%20mark%20inom%20Uppsala%20l%C3%A4n_slutrapport.pdf\" target=\"_blank\" rel=\"noopener\">lansstyrelsen.se (PDF)</a> (Hämtad: 29 oktober 2026). Tabell 2 och 6; används som proxy för Skåne.",
+  "Malmö stad (2023) <i>Översiktsplan för Malmö</i>. Antagen av kommunfullmäktige 28 september 2023. Tillgänglig på: <a href=\"https://gis.malmo.se/oversiktsplan/2022/bilder/%C3%96P2023_antagen_av_KF_28_september_2023.pdf\" target=\"_blank\" rel=\"noopener\">gis.malmo.se (PDF)</a> (Hämtad: 29 oktober 2026).",
+  "Malmö stad (2024) <i>OP2023_Underlag – Utbyggnadsområden</i> [ArcGIS MapServer, lager 129]. Tillgänglig på: <a href=\"https://gis.malmo.se/arcgis/rest/services/op/OP2023_Underlag/MapServer/129\" target=\"_blank\" rel=\"noopener\">gis.malmo.se/arcgis/rest/services/op/OP2023_Underlag/MapServer/129</a> (Hämtad: 29 oktober 2026). Definition av Fokus 1/2 enligt webbkartan <a href=\"https://gis.malmo.se/portal/apps/View/index.html?appid=ed85b19e3a3a4598bc946995c0090db6\" target=\"_blank\" rel=\"noopener\">Utbyggnadskapacitet ÖP2023</a>.",
+  "Malmö stad (u.å.a) <i>Malmo_adresser_platser</i> [ArcGIS GeocodeServer]. Tillgänglig på: <a href=\"https://gis.malmo.se/arcgis/rest/services/Malmo_adresser_platser/GeocodeServer\" target=\"_blank\" rel=\"noopener\">gis.malmo.se/arcgis/rest/services/Malmo_adresser_platser/GeocodeServer</a> (Hämtad: 29 oktober 2026).",
+  "Malmö stad (u.å.b) <i>Malmö Energikarta</i>. Tillgänglig på: <a href=\"https://stadsatlas.malmo.se/energikarta/\" target=\"_blank\" rel=\"noopener\">stadsatlas.malmo.se/energikarta/</a> (Hämtad: 29 oktober 2026). Användarens CSV-fil <i>Energikarta filer.csv</i> (31 121 adressrader) är beräkningsunderlaget.",
+  "OpenStreetMap contributors (2026) <i>OpenStreetMap</i>, uttag via Overpass API 29 oktober 2026 (byggnader och markanvändning). ODbL 1.0. Tillgänglig på: <a href=\"https://www.openstreetmap.org/copyright\" target=\"_blank\" rel=\"noopener\">openstreetmap.org/copyright</a>.",
+  "OpenStreetMap contributors (u.å.) <i>Land polygons</i>. Tillgänglig på: <a href=\"https://osmdata.openstreetmap.de/data/land-polygons.html\" target=\"_blank\" rel=\"noopener\">osmdata.openstreetmap.de</a> (uttag 26 oktober 2026).",
+  "Statistiska centralbyrån (2025) <i>DeSO – Demografiska statistikområden</i>, version 2025_v2. Tillgänglig på: <a href=\"https://www.scb.se/vara-tjanster/oppna-data/oppna-geodata/demografiska-statistikomraden-deso/\" target=\"_blank\" rel=\"noopener\">scb.se</a> (Hämtad: 26 oktober 2026).",
+  "Vägvis (2026) <i>Vägvis 2.3.1 – trafikens klimatavtryck</i> [programvara och datapaket]. GitHub: Mulmen65/vagvisa. Hushållsdata: SCB TAB6589, TAB6568, TAB6574 (2024); körsträckor: Trafikanalys (2025) <i>Körsträckor 2024</i>."
+ ]
+}
