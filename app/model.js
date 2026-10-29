@@ -6,7 +6,7 @@
   else root.MalmoOP = factory();
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
   'use strict';
-  const VERSION = '1.1.0';
+  const VERSION = '1.2.0';
   const BASE_YEAR = 2024, END_YEAR = 2050;
   const YEARS = [2024, 2030, 2035, 2040, 2045, 2050];
   const ACK = [2030, 2050];

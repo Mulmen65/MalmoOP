@@ -1,4 +1,4 @@
-/* MalmoOP 1.1 – gränssnitt. Samma struktur och stil som Vägvis 2.3.1. */
+/* MalmoOP 1.2 – gränssnitt. Samma struktur och stil som Vägvis 2.3.1. */
 (function () {
 'use strict';
 const M = window.MalmoOP, $ = id => document.getElementById(id);
@@ -79,7 +79,7 @@ const stockCount = new Float64Array(S.n); if (D.energi.bestand) D.energi.bestand
 
 /* ---------- ram: sidomeny, rubrik, år ---------- */
 const HEAD = {
-  overview: ['MALMOOP 1.1 · ÖVERSIKT', 'Malmö växer.<br><em>Hela klimatavtrycket.</em>', 'Årligt klimatavtryck per DeSO från energi i befintliga byggnader, mobilitet och utbyggnaden enligt ÖP 2023.'],
+  overview: ['MALMOOP 1.2 · ÖVERSIKT', 'Malmö växer.<br><em>Hela klimatavtrycket.</em>', 'Årligt klimatavtryck per DeSO från energi i befintliga byggnader, mobilitet och utbyggnaden enligt ÖP 2023.'],
   map: ['DESO 2025 · 209 OMRÅDEN', 'Karta & DeSO', 'Utforska områdena. Välj nyckeltal, enhet och år; klicka på ett område för detaljer.'],
   calc: ['STEG FÖR STEG', 'Så räknas resultatet', 'Följ beräkningen för ett område, från energideklaration och trafik till nybyggnation och mark.'],
   parameters: ['ANTAGANDEN', 'Antaganden & scenario', 'Alla värden kan ändras. Beräkningen uppdateras direkt och sparas i din webbläsare.'],

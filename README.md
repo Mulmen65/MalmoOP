@@ -1,4 +1,4 @@
-# MalmoOP 1.1 – stadens klimatavtryck per DeSO
+# MalmoOP 1.2 – stadens klimatavtryck per DeSO
 
 MalmoOP är en GitHub/Streamlit-app som beräknar klimatavtrycket per DeSO i Malmö. Den har samma gränssnitt som Vägvis 2.3.1 (mörkgrön sidomeny, A/B-växel, kort, karta med havsavskiljning och områdespanel). Appen räknar på tre delar:
 
@@ -155,6 +155,14 @@ tests/                     beräknings- och apptester
 * Statistiska centralbyrån (2026b) *Antal lägenheter efter region, hustyp och bostadsarea*. Tabell BO0104T5. https://www.statistikdatabasen.scb.se (Hämtad: 29 oktober 2026).
 * Statistiska centralbyrån (2025) *DeSO – Demografiska statistikområden*, 2025_v2. https://www.scb.se/vara-tjanster/oppna-data/oppna-geodata/demografiska-statistikomraden-deso/
 * Vägvis (2026) *Vägvis 2.3.1 – trafikens klimatavtryck*. GitHub: Mulmen65/vagvisa.
+
+## Versioner
+
+| Version | Datum | Innehåll |
+|---|---|---|
+| 1.2.0 | 29 oktober 2026 | Emissionsfaktorerna för el och fjärrvärme är Boverkets värden (0,037 / 0,056 kg CO₂e/kWh) och hålls fasta i osäkerhetsberäkningen. Energins 95 %-intervall 2024: 121–154 kt; per DeSO typiskt ±24 %. |
+| 1.1.0 | 29 oktober 2026 | Hela byggnadsbeståndet (odeklarerade byggnader skattas), kalibrering mot SCB:s fjärrvärme 2024 per sektor, Monte Carlo för energin, kort om byggnadsbestånd och SCB-kontroll. |
+| 1.0.0 | 29 oktober 2026 | Första versionen: energideklarationer, mobilitet från Vägvis 2.3.1 och exploatering enligt ÖP 2023 per DeSO. |
 
 ## Licens
 
