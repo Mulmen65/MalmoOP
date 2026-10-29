@@ -73,8 +73,56 @@ class TestData(unittest.TestCase):
             a = json.loads((ROOT / "data/energi_deklarationer.json").read_text(encoding="utf-8"))
             b = json.loads((work / "data/energi_deklarationer.json").read_text(encoding="utf-8"))
             self.assertEqual(a["kolumner"], b["kolumner"])
+            self.assertEqual(a["bestand"], b["bestand"])
+            self.assertEqual(a["kalibrering"], b["kalibrering"])
         finally:
             shutil.rmtree(work, ignore_errors=True)
+
+    def test_building_stock(self):
+        e = json.loads((ROOT / "data/energi_deklarationer.json").read_text(encoding="utf-8"))
+        b, kl = e["bestand"], e["koder"]["kl"]
+        n = len(b["deso"])
+        self.assertGreater(n, 15000)
+        self.assertTrue(all(len(v) == n for v in b.values()))
+        self.assertTrue(all(0 <= d < 209 for d in b["deso"]))
+        self.assertTrue(all(kl[k] in ("smahus", "flerbostadshus", "lokal", "industri") for k in b["kl"]))
+        self.assertTrue(all(s > 0 for s in b["se"]) and all(0 <= x <= 1 for x in b["el"]))
+        sm = e["urval"]["bestand"]["sammanfattning"]
+        self.assertEqual(n, sm["skattad"]["byggnader"] + sm["sammanbyggd_med_deklarerad"]["byggnader"])
+        self.assertEqual(sum(sm[k]["byggnader"] for k in sm), e["urval"]["bestand"]["osm_byggnader"])
+        kal = e["kalibrering"]
+        self.assertAlmostEqual(sum(kal["sektor_mal_mwh"].values()), kal["mal_fjarrvarme_mwh"], delta=2)
+
+
+class TestUpdateFlow(unittest.TestCase):
+    def test_update_reuses_existing_buildings(self):
+        """En ny adress i en byggnad som redan finns i beståndet får inte lägga till byggnaden en gång till."""
+        csv_text = (ROOT / "data/kalla/Energikarta_filer.csv").read_text(encoding="utf-8-sig")
+        first = csv_text.splitlines()[1].split(";")
+        new_row = first[:]
+        new_row[0], new_row[9], new_row[10] = "99999999", "Testgatan 1", "21111"
+        csv_text = csv_text.rstrip("\n") + "\n" + ";".join(new_row) + "\n"
+        with open(ROOT / "data/kalla/osm_byggnader_malmo.tsv", encoding="utf-8") as fh:
+            lines = [ln for ln in fh if not ln.startswith("#")]
+        way = lines[1].split("\t")[1]
+        fake_geo = [{"adress": "Testgatan 1", "postnummer": "21111", "flagga": "A", "x_3008": "117406", "y_3008": "6165861", "score": 100,
+                     "status": "M", "match_addr_avvikande": "", "match_postnr_avvikande": ""}]
+        orig = uppdatera.geocode, uppdatera.buildings_for
+        uppdatera.geocode = lambda missing, progress: fake_geo
+        uppdatera.buildings_for = lambda pts, progress: ([{"osm_way": int(way), "fotavtryck_m2": 100, "building": "yes", "building_levels": "",
+                                                           "height": "", "roof_levels": "", "levels_underground": "", "amenity_shop_office": "",
+                                                           "lon": "13.0", "lat": "55.6"}], [0], [0])
+        try:
+            res = uppdatera.run_update(csv_text, progress=lambda *_: None)
+        finally:
+            uppdatera.geocode, uppdatera.buildings_for = orig
+        self.assertEqual(res["log"]["nya_adresser"], 1)
+        osm = [ln for ln in res["files"]["data/kalla/osm_byggnader_malmo.tsv"].splitlines() if ln and not ln.startswith("#")]
+        self.assertEqual(len(osm), len(lines), "byggnaden fanns redan och ska inte läggas till")
+        a2b = res["files"]["data/kalla/adress_till_byggnad.tsv"].splitlines()[-1].split("\t")
+        self.assertEqual(a2b[:3], ["Testgatan 1", "21111", lines[1].split("\t")[0]])
+        e = json.loads(res["files"]["data/energi_deklarationer.json"])
+        self.assertIn(99999999, e["kolumner"]["id"])
 
     def test_mobility_matches_vagvis_city_totals(self):
         mob = json.loads((ROOT / "data/mobilitet_vagvis.json").read_text(encoding="utf-8"))

@@ -194,7 +194,7 @@ def run_update(csv_text: str, progress=print, root: Path = ROOT) -> dict:
     missing, seen = [], set()
     for r in rows:
         k = (norm(r["adress"]), re.sub(r"\D", "", r["postnummer"]))
-        if k not in known and k not in seen and k[0]:
+        if k not in known and k not in seen and re.search(r"[^\W\d_]", k[0]):  # hoppa över skräpadresser som "0"
             seen.add(k); missing.append((" ".join(r["adress"].split()), k[1]))
     progress(f"{len(rows)} rader i filen, {len(missing)} nya adresser att koppla.")
     log = {"rader": len(rows), "nya_adresser": len(missing)}
@@ -210,15 +210,31 @@ def run_update(csv_text: str, progress=print, root: Path = ROOT) -> dict:
         log["nya_godkanda"] = len(ok)
         if ok:
             meta, idx, dist = buildings_for([p for _, p in ok], progress)
+            # Byggnadsfilen innehåller hela beståndet: återanvänd befintliga byggnader (samma OSM-id) och lägg bara till nya,
+            # annars skulle de räknas två gånger i det skattade beståndet.
             lines = [ln for ln in (kalla / "osm_byggnader_malmo.tsv").read_text(encoding="utf-8").splitlines() if ln and not ln.startswith("#")]
-            start = len(lines) - 1
+            head = lines[0].split("\t")
+            existing = {}
+            for ln in lines[1:]:
+                c = ln.split("\t")
+                existing.setdefault(c[1], int(c[0]))
+            start = max(existing.values(), default=-1) + 1
             used = sorted({i for i in idx if i is not None})
-            remap = {i: start + n for n, i in enumerate(used)}
+            remap, new = {}, []
+            for i in used:
+                way = str(meta[i]["osm_way"])
+                if way in existing:
+                    remap[i] = existing[way]
+                else:
+                    remap[i] = start + len(new); new.append(i)
+            progress(f"OSM-byggnader: {len(used) - len(new)} fanns redan i beståndet, {len(new)} nya läggs till")
             with open(kalla / "osm_byggnader_malmo.tsv", "a", encoding="utf-8") as fh:
-                for i in used:
+                for i in new:
                     m = meta[i]
-                    fh.write("\t".join(str(x) for x in [remap[i], m["osm_way"], m["fotavtryck_m2"], m["building"], m["building_levels"], m["height"],
-                                                        m["roof_levels"], m["levels_underground"], m["amenity_shop_office"], m["lon"], m["lat"]]) + "\n")
+                    row = [remap[i], m["osm_way"], m["fotavtryck_m2"], m["building"], m["building_levels"], m["height"],
+                           m["roof_levels"], m["levels_underground"], m["amenity_shop_office"], m["lon"], m["lat"]]
+                    row += [""] * (len(head) - len(row))  # t.ex. landuse saknas för nya byggnader
+                    fh.write("\t".join(str(x) for x in row) + "\n")
             with open(kalla / "adress_till_byggnad.tsv", "a", encoding="utf-8") as fh:
                 for (g, _), i, d in zip(ok, idx, dist):
                     fh.write(f"{g['adress']}\t{g['postnummer']}\t{'' if i is None else remap[i]}\t{'' if d is None else d}\n")

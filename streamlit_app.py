@@ -1,4 +1,4 @@
-"""MalmoOP 1.0 – klimatavtryck per DeSO i Malmö (energi, mobilitet och exploatering enligt ÖP 2023).
+"""MalmoOP 1.1 – klimatavtryck per DeSO i Malmö (energi, mobilitet och exploatering enligt ÖP 2023).
 
 Start lokalt:  python -m streamlit run streamlit_app.py
 Allt underlag ligger i mapparna app/ och data/. Beräkningen körs i webbläsaren.
@@ -142,7 +142,7 @@ def main() -> None:
     import streamlit as st
     import streamlit.components.v1 as components
 
-    st.set_page_config(page_title="MalmoOP 1.0", page_icon="🏙️", layout="wide", initial_sidebar_state="collapsed")
+    st.set_page_config(page_title="MalmoOP 1.1", page_icon="🏙️", layout="wide", initial_sidebar_state="collapsed")
     st.markdown("""<style>
 [data-testid="stHeader"], [data-testid="stSidebar"], footer {display:none;}
 .block-container {padding:0 !important;max-width:100% !important;}

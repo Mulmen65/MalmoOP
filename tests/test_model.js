@@ -22,8 +22,8 @@ test('DeSO-summor = Malmö-summor för varje år och komponent', () => {
   }
 });
 
-test('Energins massbalans: kartlagt + ej kartlagt = alla deklarationer', () => {
-  const P = M.params({}), eb = M.energyBase(S, P), E = D.energi.kolumner;
+test('Energins massbalans: kartlagt + ej kartlagt = alla deklarationer (bara deklarerade, okalibrerat)', () => {
+  const P = M.params({bestand: 'deklarerade'}), eb = M.energyBase(S, P), E = D.energi.kolumner;
   let all = 0;
   for (let i = 0; i < E.id.length; i++) {
     const a = E.bta[i] > 0 ? E.bta[i] * P.atempFaktor : S.btaMedian * P.atempFaktor;
@@ -31,12 +31,39 @@ test('Energins massbalans: kartlagt + ej kartlagt = alla deklarationer', () => {
   }
   near(sum(eb.t) + eb.unmappedT, all, 1e-9, 'massbalans');
   assert.strictEqual(eb.unmapped, D.energi.urval.ej_kartlagda);
+  assert.strictEqual(eb.k, 1); assert.strictEqual(eb.kalibrering, 'ingen');
+});
+
+test('Hela beståndet: massbalans med kalibreringsfaktor per post', () => {
+  const P = M.params({}), eb = M.energyBase(S, P), it = M.energyItems(S, P);
+  assert.strictEqual(it.m, D.energi.kolumner.id.length + D.energi.bestand.bta.length);
+  let all = 0;
+  for (let i = 0; i < it.m; i++) all += eb.kG[it.grp[i]] * it.se[i] * it.a[i] * (it.el[i] * P.efEl + (1 - it.el[i]) * P.efFv) / 1000;
+  near(sum(eb.t) + eb.unmappedT, all, 1e-9, 'massbalans hela');
+  near(sum(eb.skattadT), D.energi.bestand.bta.reduce((s, b, j) => { const kl = D.energi.bestand.kl[j], a = b * P.atempFaktor * (kl === S.IND ? P.industriAndel : 1), el = D.energi.bestand.el[j];
+    return s + eb.kG[S.GRP[kl]] * D.energi.bestand.se[j] * a * (el * P.efEl + (1 - el) * P.efFv) / 1000; }, 0), 1e-9, 'skattade byggnader');
+  assert.ok(sum(eb.t) > sum(M.energyBase(S, M.params({bestand: 'deklarerade', kalibrering: 'ingen'})).t), 'hela beståndet ger mer än bara deklarerade');
+});
+
+test('Kalibrering: fjärrvärmen möter SCB per sektor eller totalt', () => {
+  const kal = D.energi.kalibrering, sek = M.energyBase(S, M.params({kalibrering: 'sektor'}));
+  assert.strictEqual(sek.kalibrering, 'sektor'); assert.strictEqual(sek.kG[0], 1, 'småhus kalibreras inte');
+  near(sek.grupper[1].modell * sek.kG[1], kal.sektor_mal_mwh.flerbostadshus * 1000, 1e-9, 'flerbostadshus');
+  near(sek.grupper[2].modell * sek.kG[2], kal.sektor_mal_mwh.lokal_industri * 1000, 1e-9, 'lokaler och industri');
+  near(sek.dhKalibrerad, sek.grupper[0].modell + (kal.sektor_mal_mwh.flerbostadshus + kal.sektor_mal_mwh.lokal_industri) * 1000, 1e-9, 'summa sektor');
+  const tot = M.energyBase(S, M.params({kalibrering: 'total'}));
+  near(tot.dhKalibrerad, kal.mal_fjarrvarme_mwh * 1000, 1e-9, 'total');
+  near(tot.k, kal.mal_fjarrvarme_mwh * 1000 / tot.dhModell, 1e-12, 'k total');
+  const ingen = M.energyBase(S, M.params({kalibrering: 'ingen'}));
+  near(ingen.dhKalibrerad, ingen.dhModell, 1e-12); near(ingen.dhModell, tot.dhModell, 1e-12, 'samma okalibrerade modell');
+  near(kal.sektor_mal_mwh.smahus + kal.sektor_mal_mwh.flerbostadshus + kal.sektor_mal_mwh.lokal_industri, kal.mal_fjarrvarme_mwh, 1e-5, 'sektorer = total');
+  assert.strictEqual(M.params({kalibrering: 'scb'}).kalibrering, 'total', 'äldre värde scb tolkas som total');
 });
 
 test('Räkneexempel energi: 100 kWh/m², 1 000 m², 10 % el = 5,41 t', () => {
   const t = 100 * 1000 * (0.1 * 0.037 + 0.9 * 0.056) / 1000;
   near(t, 5.41, 1e-12);
-  const P = M.params({atempLage: 'fast', atempFast: 1000, elLage: 'fast', elFast: 0.1}), eb = M.energyBase(S, P), E = D.energi.kolumner;
+  const P = M.params({atempLage: 'fast', atempFast: 1000, elLage: 'fast', elFast: 0.1, bestand: 'deklarerade'}), eb = M.energyBase(S, P), E = D.energi.kolumner;
   let mapped = 0; for (let i = 0; i < E.id.length; i++) if (E.alloc[i].length) mapped += E.se[i] * 1000 * (0.1 * 0.037 + 0.9 * 0.056) / 1000;
   near(sum(eb.t), mapped, 1e-9, 'fast läge');
 });
@@ -128,4 +155,32 @@ test('Deklarationernas DeSO-vikter summerar till 1', () => {
   for (let i = 0; i < E.id.length; i++) if (E.alloc[i].length) near(E.alloc[i].reduce((s, [, w]) => s + w, 0), 1, 1e-3, 'id ' + E.id[i]);
 });
 
-console.log('\n' + passed + ' beräkningstester godkända.');
+(async () => {
+  const P = {iterationer: 200, seed: 42};
+  const a = await M.simulateEnergy(S, P), b = await M.simulateEnergy(S, P), c = await M.simulateEnergy(S, {...P, seed: 43});
+  test('Monte Carlo: samma seed ger samma resultat, annat seed ett annat', () => {
+    assert.deepStrictEqual(Array.from(a.deso.p50), Array.from(b.deso.p50));
+    assert.strictEqual(a.city.p975, b.city.p975);
+    assert.notStrictEqual(a.city.p50, c.city.p50);
+    assert.strictEqual(a.nyckel, M.uncertaintyKey(M.params(P)));
+  });
+  test('Monte Carlo: p2,5 ≤ p50 ≤ p97,5 och beräknat värde inom intervallet', () => {
+    for (let d = 0; d < S.n; d++) assert.ok(a.deso.p025[d] <= a.deso.p50[d] + 1e-9 && a.deso.p50[d] <= a.deso.p975[d] + 1e-9, 'DeSO ' + d);
+    const det = sum(M.energyBase(S, M.params(P)).t);
+    assert.ok(a.city.p025 < det && det < a.city.p975, 'Malmö ' + det);
+    assert.ok(a.cityAktivitet.p975 - a.cityAktivitet.p025 < a.city.p975 - a.city.p025, 'fasta faktorer ger smalare intervall');
+  });
+  const z = await M.simulateEnergy(S, {iterationer: 100, atempLage: 'fast', elLage: 'fast', cvEfEl: 0, cvEfFv: 0, bestand: 'deklarerade', seed: 7});
+  test('Monte Carlo: fasta emissionsfaktorer ger samma intervall för total och aktivitetsdata', () => {
+    near(z.city.p025, z.cityAktivitet.p025, 1e-9); near(z.city.p975, z.cityAktivitet.p975, 1e-9);
+  });
+  test('Intervall för framtida år skalas med effektivisering och emissionsfaktorer', () => {
+    const Q = M.params({effektivisering2050: 30, efForandring2050: -20});
+    const I24 = M.energyInterval(a, Q, 2024), I50 = M.energyInterval(a, Q, 2050), Iack = M.energyInterval(a, Q, 'ack');
+    near(I24.city.p975, a.city.p975, 1e-12); near(I50.f, 0.7 * 0.8, 1e-12); near(I50.hi(5), a.deso.p975[5] * 0.7 * 0.8, 1e-12);
+    const R = M.compute(S, Q); near(M.view(S, R, 'ack').city.energi, sum(R.energyBase.t) * Iack.f, 1e-9, 'ack-faktor');
+  });
+  const stop = await M.simulateEnergy(S, {iterationer: 500}, p => p < 0.2);
+  test('Avbruten Monte Carlo returnerar null', () => assert.strictEqual(stop, null));
+  console.log('\n' + passed + ' beräkningstester godkända.');
+})().catch(e => { console.error(e); process.exit(1); });

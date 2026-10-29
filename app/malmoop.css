@@ -71,3 +71,25 @@
 @media(max-width:1150px){.kpis.four{grid-template-columns:1fr 1fr}.kv{grid-template-columns:repeat(2,1fr)}.parts .component-row{grid-template-columns:130px 1fr 80px}}
 @media(max-width:720px){.kpis.four{grid-template-columns:1fr}.year-switch button{padding:6px 8px;font-size:10.5px}.map-toolbar2 select{min-width:0;width:100%}.map-toolbar2 label.inline{flex-wrap:wrap;width:100%}}
 @media print{.year-switch,.map-checks,.map-toolbar2{display:none!important}}
+/* 1.1 Osäkerhet i energidelen */
+.u-card .u-head{align-items:flex-start}
+.u-run .progress{margin-top:4px}
+.u-run p{margin:7px 0 0}
+.u-stale{display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px;background:#f3f7f2;border:1px solid #d8e6dc;border-radius:10px;padding:10px 14px}
+.u-stale .primary span{padding-left:8px}
+.u-done{margin:0 0 4px}
+.u-grid{display:grid;grid-template-columns:minmax(230px,.9fr) 1.6fr;gap:26px;align-items:start;margin-top:14px}
+.u-facts{margin:0}
+.u-facts div{border-top:1px solid var(--line);padding:10px 0}
+.u-facts dt{font-size:10px;letter-spacing:.7px;text-transform:uppercase;color:var(--muted);font-weight:650}
+.u-facts dd{margin:3px 0 0;font-size:19px;font-weight:650;color:var(--ink);font-variant-numeric:tabular-nums}
+.u-facts dd small{display:block;font-size:10.5px;font-weight:400;color:var(--muted);margin-top:2px}
+.u-line{display:flex;align-items:center;gap:6px;margin:10px 0 0}
+.u-line .sw{display:inline-block;width:10px;height:10px;border-radius:2px}
+.u-param{border-top:1px solid var(--line);margin-top:18px;padding-top:4px}
+.u-param h3{margin:10px 0 8px}
+.ad-facts .ad-wide{grid-column:1/-1}
+td.iv{color:var(--muted)}
+@media(max-width:1150px){.u-grid{grid-template-columns:1fr}}
+@media print{.u-stale,.u-run{display:none!important}}
+.calc-result small{display:block;font-size:10.5px;color:var(--muted);margin-top:1px}
